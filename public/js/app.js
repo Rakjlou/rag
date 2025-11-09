@@ -134,9 +134,7 @@ if (typeof STORE_NAME !== 'undefined') {
 
       const docName = data.result?.response?.name || 'Unknown';
       showSuccess(`File uploaded and indexed successfully: ${docName}`);
-
-      // Small delay to ensure document appears in list API
-      setTimeout(() => loadDocuments(), 1500);
+      loadDocuments();
     } catch (error) {
       progressDiv.textContent = '';
       showError(error.message);
