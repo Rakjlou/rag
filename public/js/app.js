@@ -262,68 +262,104 @@ async function deleteDocument(name) {
 
 function displaySearchResults(result) {
   const resultsDiv = document.getElementById('search-results');
+  const citationsContainer = document.getElementById('citations-container');
 
   if (!result || !result.text) {
     resultsDiv.innerHTML = '<p class="empty-state">No results found</p>';
+    citationsContainer.innerHTML = '<p class="empty-state">No citations available</p>';
     return;
   }
 
-  let html = `<div class="search-result-content">
-    <h3>Answer</h3>
-    <div class="answer-text">${escapeHtml(result.text).replace(/\n/g, '<br>')}</div>
-  `;
+  // Render answer with markdown and citation markers
+  let answerHtml = marked.parse(result.text);
 
-  if (result.groundingMetadata?.groundingChunks) {
-    html += `<h3>Sources & Citations</h3>`;
+  // Insert citation markers if we have grounding supports
+  if (result.groundingMetadata?.groundingSupports) {
+    const supports = result.groundingMetadata.groundingSupports;
 
-    // Display grounding supports (which parts of the answer came from where)
-    if (result.groundingMetadata.groundingSupports) {
-      html += `<div class="citations-section">
-        <h4>Answer Citations</h4>
-        ${result.groundingMetadata.groundingSupports.map((support, i) => {
-          const chunkIndices = support.groundingChunkIndices || [];
-          const sourceRefs = chunkIndices.map(idx => `[${idx + 1}]`).join(' ');
-          return `
-            <div class="citation-item">
-              <span class="citation-text">"${escapeHtml(support.segment.text)}"</span>
-              <span class="citation-ref">${sourceRefs}</span>
-            </div>
-          `;
-        }).join('')}
-      </div>`;
-    }
+    // Sort supports by start index in reverse order to insert from end to beginning
+    const sortedSupports = [...supports].sort((a, b) => b.segment.startIndex - a.segment.startIndex);
 
-    // Display source documents with excerpts
-    html += `<div class="sources-section">
-      <h4>Source Documents</h4>
-      ${result.groundingMetadata.groundingChunks.map((chunk, i) => {
-        if (chunk.retrievedContext) {
-          const text = chunk.retrievedContext.text || '';
-          const preview = text.length > 500 ? text.substring(0, 500) + '...' : text;
-          return `
-            <div class="source-item">
-              <div class="source-header">
-                <strong>[${i + 1}] ${escapeHtml(chunk.retrievedContext.title)}</strong>
-              </div>
-              <div class="source-excerpt">${escapeHtml(preview).replace(/\n/g, '<br>')}</div>
-            </div>
-          `;
-        } else if (chunk.web) {
-          return `
-            <div class="source-item">
-              <div class="source-header">
-                <strong>[${i + 1}]</strong> <a href="${escapeHtml(chunk.web.uri)}" target="_blank">${escapeHtml(chunk.web.title || chunk.web.uri)}</a>
-              </div>
-            </div>
-          `;
-        }
-        return '';
-      }).join('')}
-    </div>`;
+    let textWithMarkers = result.text;
+    sortedSupports.forEach((support, reverseIdx) => {
+      const originalIdx = supports.indexOf(support);
+      const endIndex = support.segment.endIndex;
+      const chunkIndices = support.groundingChunkIndices || [];
+      const markers = chunkIndices.map(idx => `<span class="citation-marker" onclick="showCitation(${idx})">${idx + 1}</span>`).join('');
+
+      textWithMarkers = textWithMarkers.slice(0, endIndex) + markers + textWithMarkers.slice(endIndex);
+    });
+
+    answerHtml = marked.parse(textWithMarkers);
   }
 
-  html += '</div>';
-  resultsDiv.innerHTML = html;
+  // Display answer in main section
+  resultsDiv.innerHTML = `
+    <div class="search-result-content">
+      <h3>Answer</h3>
+      <div class="answer-text">${answerHtml}</div>
+    </div>
+  `;
+
+  // Display citations in sidebar
+  if (result.groundingMetadata?.groundingChunks) {
+    let citationsHtml = '';
+
+    // Add grounding supports with citation details
+    if (result.groundingMetadata.groundingSupports) {
+      citationsHtml += '<div class="citations-list">';
+      result.groundingMetadata.groundingSupports.forEach((support, i) => {
+        const chunkIndices = support.groundingChunkIndices || [];
+        const sourceRefs = chunkIndices.map(idx => `[${idx + 1}]`).join(' ');
+        citationsHtml += `
+          <div class="citation-item" id="citation-${i}">
+            <div class="citation-header">
+              <span class="citation-ref">${sourceRefs}</span>
+            </div>
+            <div class="citation-text">"${escapeHtml(support.segment.text)}"</div>
+          </div>
+        `;
+      });
+      citationsHtml += '</div>';
+    }
+
+    // Add source documents with excerpts
+    citationsHtml += '<div class="sources-section"><h4>Source Documents</h4>';
+    result.groundingMetadata.groundingChunks.forEach((chunk, i) => {
+      if (chunk.retrievedContext) {
+        const text = chunk.retrievedContext.text || '';
+        const preview = text.length > 500 ? text.substring(0, 500) + '...' : text;
+        citationsHtml += `
+          <div class="source-item" id="source-${i}">
+            <div class="source-header">
+              <strong>[${i + 1}] ${escapeHtml(chunk.retrievedContext.title)}</strong>
+            </div>
+            <details class="source-details">
+              <summary>View excerpt</summary>
+              <div class="source-excerpt">${escapeHtml(preview).replace(/\n/g, '<br>')}</div>
+            </details>
+          </div>
+        `;
+      } else if (chunk.web) {
+        citationsHtml += `
+          <div class="source-item" id="source-${i}">
+            <div class="source-header">
+              <strong>[${i + 1}]</strong> <a href="${escapeHtml(chunk.web.uri)}" target="_blank">${escapeHtml(chunk.web.title || chunk.web.uri)}</a>
+            </div>
+          </div>
+        `;
+      }
+    });
+    citationsHtml += '</div>';
+
+    citationsContainer.innerHTML = citationsHtml;
+
+    // Open sidebar and switch to citations tab
+    openSidebar();
+    switchTab('citations');
+  } else {
+    citationsContainer.innerHTML = '<p class="empty-state">No citations available</p>';
+  }
 }
 
 function toggleDocumentDetails(element) {
@@ -331,6 +367,63 @@ function toggleDocumentDetails(element) {
   if (details) {
     details.style.display = details.style.display === 'none' ? 'block' : 'none';
     element.classList.toggle('expanded');
+  }
+}
+
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const toggleIcon = document.getElementById('toggle-icon');
+
+  sidebar.classList.toggle('collapsed');
+
+  if (sidebar.classList.contains('collapsed')) {
+    toggleIcon.textContent = '▶';
+  } else {
+    toggleIcon.textContent = '◀';
+  }
+}
+
+function openSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const toggleIcon = document.getElementById('toggle-icon');
+
+  sidebar.classList.remove('collapsed');
+  toggleIcon.textContent = '◀';
+}
+
+function switchTab(tabName) {
+  // Update tab buttons
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    if (btn.dataset.tab === tabName) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+
+  // Update tab content
+  document.querySelectorAll('.tab-content').forEach(content => {
+    if (content.id === `${tabName}-tab`) {
+      content.classList.add('active');
+    } else {
+      content.classList.remove('active');
+    }
+  });
+}
+
+function showCitation(sourceIdx) {
+  // Open sidebar and switch to citations tab
+  openSidebar();
+  switchTab('citations');
+
+  // Scroll to the source
+  const sourceElement = document.getElementById(`source-${sourceIdx}`);
+  if (sourceElement) {
+    sourceElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    sourceElement.style.backgroundColor = 'var(--bg-light)';
+    setTimeout(() => {
+      sourceElement.style.backgroundColor = '';
+    }, 2000);
   }
 }
 

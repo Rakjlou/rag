@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Store Details - Google File Search</title>
   <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
 </head>
 <body>
   <nav class="navbar">
@@ -29,7 +30,7 @@
       </div>
     </div>
 
-    <div class="store-sections">
+    <div class="store-layout">
       <section class="search-section">
         <h2>Search Documents</h2>
         <form id="search-form">
@@ -43,15 +44,36 @@
         <div id="search-results" class="search-results"></div>
       </section>
 
-      <section class="documents-section">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-          <h2 style="margin: 0;">Documents</h2>
-          <button class="btn btn-secondary" onclick="loadDocuments()" style="padding: 0.5rem 1rem;">Refresh</button>
+      <aside id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+          <button id="sidebar-toggle" class="sidebar-toggle" onclick="toggleSidebar()">
+            <span id="toggle-icon">◀</span>
+          </button>
         </div>
-        <div id="documents-container" class="documents-list">
-          <div class="loading">Loading documents...</div>
+
+        <div class="sidebar-content">
+          <div class="sidebar-tabs">
+            <button class="tab-btn active" data-tab="citations" onclick="switchTab('citations')">Citations</button>
+            <button class="tab-btn" data-tab="documents" onclick="switchTab('documents')">Documents</button>
+          </div>
+
+          <div id="citations-tab" class="tab-content active">
+            <div id="citations-container">
+              <p class="empty-state">Search to see citations here</p>
+            </div>
+          </div>
+
+          <div id="documents-tab" class="tab-content">
+            <div class="documents-header">
+              <h3>Documents</h3>
+              <button class="btn btn-secondary btn-sm" onclick="loadDocuments()">Refresh</button>
+            </div>
+            <div id="documents-container" class="documents-list">
+              <div class="loading">Loading documents...</div>
+            </div>
+          </div>
         </div>
-      </section>
+      </aside>
     </div>
 
     <div id="rename-modal" class="modal">
