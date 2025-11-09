@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Store Details - Google File Search</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <a href="/" class="nav-brand">Google File Search</a>
+      <ul class="nav-links">
+        <li><a href="/">Home</a></li>
+        <li><a href="/stores">Stores</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main class="container">
+    <div class="page-header">
+      <div>
+        <a href="/stores" class="back-link">← Back to Stores</a>
+        <h1 id="store-title">Loading...</h1>
+      </div>
+      <button class="btn btn-primary" onclick="showUploadModal()">Upload File</button>
+    </div>
+
+    <div class="store-sections">
+      <section class="search-section">
+        <h2>Search Documents</h2>
+        <form id="search-form">
+          <div class="search-input-group">
+            <textarea id="search-query" name="query" rows="3" placeholder="Ask a question about your documents..." required></textarea>
+            <button type="submit" class="btn btn-primary">Search</button>
+          </div>
+        </form>
+
+        <div id="search-results" class="search-results"></div>
+      </section>
+
+      <section class="documents-section">
+        <h2>Documents</h2>
+        <div id="documents-container" class="documents-list">
+          <div class="loading">Loading documents...</div>
+        </div>
+      </section>
+    </div>
+
+    <div id="upload-modal" class="modal">
+      <div class="modal-content">
+        <h2>Upload File</h2>
+        <form id="upload-form" enctype="multipart/form-data">
+          <div class="form-group">
+            <label for="file-input">Select File</label>
+            <input type="file" id="file-input" name="file" required>
+            <small>Max size: 100MB. Supports PDF, DOCX, code files, and more.</small>
+          </div>
+          <div class="form-group">
+            <label for="file-display-name">Display Name (optional)</label>
+            <input type="text" id="file-display-name" name="displayName">
+          </div>
+          <details class="advanced-options">
+            <summary>Advanced Options</summary>
+            <div class="form-group">
+              <label for="max-tokens">Max Tokens Per Chunk</label>
+              <input type="number" id="max-tokens" name="maxTokensPerChunk" placeholder="e.g., 512">
+            </div>
+            <div class="form-group">
+              <label for="max-overlap">Max Overlap Tokens</label>
+              <input type="number" id="max-overlap" name="maxOverlapTokens" placeholder="e.g., 50">
+            </div>
+          </details>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" onclick="hideUploadModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Upload</button>
+          </div>
+        </form>
+        <div id="upload-progress" class="upload-progress"></div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>Powered by Google Gemini API</p>
+    </div>
+  </footer>
+
+  <script>
+    const STORE_NAME = '<%= storeName %>';
+  </script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

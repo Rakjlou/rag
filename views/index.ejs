@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google File Search</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <a href="/" class="nav-brand">Google File Search</a>
+      <ul class="nav-links">
+        <li><a href="/" class="active">Home</a></li>
+        <li><a href="/stores">Stores</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main class="container">
+    <div class="hero">
+      <h1>Google File Search Interface</h1>
+      <p>Upload documents, index them, and search with natural language using Google's Gemini API</p>
+      <a href="/stores" class="btn btn-primary">Get Started</a>
+    </div>
+
+    <div class="features">
+      <div class="feature-card">
+        <h3>Manage Stores</h3>
+        <p>Create and manage file search stores to organize your documents</p>
+      </div>
+      <div class="feature-card">
+        <h3>Upload Documents</h3>
+        <p>Upload PDFs, Word docs, code files, and more (100+ formats supported)</p>
+      </div>
+      <div class="feature-card">
+        <h3>Natural Language Search</h3>
+        <p>Query your documents using conversational language with AI-powered results</p>
+      </div>
+      <div class="feature-card">
+        <h3>Citations & Sources</h3>
+        <p>Get accurate answers with citations showing which documents were used</p>
+      </div>
+    </div>
+
+    <div class="api-info">
+      <h2>API Endpoints</h2>
+      <div class="endpoint-group">
+        <h3>Stores</h3>
+        <ul>
+          <li><code>GET /api/stores</code> - List all stores</li>
+          <li><code>POST /api/stores</code> - Create a new store</li>
+          <li><code>GET /api/stores/:name</code> - Get store details</li>
+          <li><code>DELETE /api/stores/:name</code> - Delete a store</li>
+        </ul>
+      </div>
+      <div class="endpoint-group">
+        <h3>Documents</h3>
+        <ul>
+          <li><code>GET /api/stores/:name/documents</code> - List documents in store</li>
+          <li><code>POST /api/stores/:name/upload</code> - Upload file to store</li>
+          <li><code>DELETE /api/documents/:name</code> - Delete a document</li>
+        </ul>
+      </div>
+      <div class="endpoint-group">
+        <h3>Search</h3>
+        <ul>
+          <li><code>POST /api/search</code> - Search across stores</li>
+        </ul>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>Powered by Google Gemini API</p>
+    </div>
+  </footer>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
