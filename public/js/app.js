@@ -268,27 +268,58 @@ function displaySearchResults(result) {
     return;
   }
 
-  // Log grounding metadata structure for debugging
-  console.log('Full grounding metadata:', JSON.stringify(result.groundingMetadata, null, 2));
-
   let html = `<div class="search-result-content">
     <h3>Answer</h3>
     <div class="answer-text">${escapeHtml(result.text).replace(/\n/g, '<br>')}</div>
   `;
 
   if (result.groundingMetadata?.groundingChunks) {
-    html += `
-      <h3>Sources</h3>
-      <div class="sources-list">
-        ${result.groundingMetadata.groundingChunks.map((chunk, i) => `
-          <div class="source-item">
-            <strong>Source ${i + 1}:</strong>
-            ${chunk.web?.uri ? `<a href="${escapeHtml(chunk.web.uri)}" target="_blank">${escapeHtml(chunk.web.title || chunk.web.uri)}</a>` :
-              escapeHtml(chunk.retrievedContext?.title || 'Document chunk')}
-          </div>
-        `).join('')}
-      </div>
-    `;
+    html += `<h3>Sources & Citations</h3>`;
+
+    // Display grounding supports (which parts of the answer came from where)
+    if (result.groundingMetadata.groundingSupports) {
+      html += `<div class="citations-section">
+        <h4>Answer Citations</h4>
+        ${result.groundingMetadata.groundingSupports.map((support, i) => {
+          const chunkIndices = support.groundingChunkIndices || [];
+          const sourceRefs = chunkIndices.map(idx => `[${idx + 1}]`).join(' ');
+          return `
+            <div class="citation-item">
+              <span class="citation-text">"${escapeHtml(support.segment.text)}"</span>
+              <span class="citation-ref">${sourceRefs}</span>
+            </div>
+          `;
+        }).join('')}
+      </div>`;
+    }
+
+    // Display source documents with excerpts
+    html += `<div class="sources-section">
+      <h4>Source Documents</h4>
+      ${result.groundingMetadata.groundingChunks.map((chunk, i) => {
+        if (chunk.retrievedContext) {
+          const text = chunk.retrievedContext.text || '';
+          const preview = text.length > 500 ? text.substring(0, 500) + '...' : text;
+          return `
+            <div class="source-item">
+              <div class="source-header">
+                <strong>[${i + 1}] ${escapeHtml(chunk.retrievedContext.title)}</strong>
+              </div>
+              <div class="source-excerpt">${escapeHtml(preview).replace(/\n/g, '<br>')}</div>
+            </div>
+          `;
+        } else if (chunk.web) {
+          return `
+            <div class="source-item">
+              <div class="source-header">
+                <strong>[${i + 1}]</strong> <a href="${escapeHtml(chunk.web.uri)}" target="_blank">${escapeHtml(chunk.web.title || chunk.web.uri)}</a>
+              </div>
+            </div>
+          `;
+        }
+        return '';
+      }).join('')}
+    </div>`;
   }
 
   html += '</div>';

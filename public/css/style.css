@@ -443,6 +443,64 @@ code {
   text-decoration: underline;
 }
 
+.citations-section,
+.sources-section {
+  margin-top: 1.5rem;
+}
+
+.citations-section h4,
+.sources-section h4 {
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.citation-item {
+  padding: 0.75rem;
+  background: var(--bg-light);
+  border-left: 3px solid var(--primary-color);
+  margin-bottom: 0.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.citation-text {
+  flex: 1;
+  font-style: italic;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+.citation-ref {
+  background: var(--primary-color);
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.source-header {
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+.source-excerpt {
+  padding: 0.75rem;
+  background: #f9f9f9;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  font-family: 'Courier New', monospace;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
 .documents-list {
   display: flex;
   flex-direction: column;
