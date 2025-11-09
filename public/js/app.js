@@ -279,35 +279,52 @@ function displaySearchResults(result) {
   // Insert citation markers if we have grounding supports
   if (result.groundingMetadata?.groundingSupports) {
     const supports = result.groundingMetadata.groundingSupports;
+    const originalText = result.text;
 
-    // Sort supports by start index in reverse order to insert from end to beginning
-    const sortedSupports = [...supports].sort((a, b) => b.segment.startIndex - a.segment.startIndex);
-
-    sortedSupports.forEach((support) => {
-      const originalIdx = supports.indexOf(support);
+    // First pass: calculate all positions and modifications based on original text
+    const modifications = [];
+    supports.forEach((support, idx) => {
       const startIndex = support.segment.startIndex;
       const endIndex = support.segment.endIndex;
       const chunkIndices = support.groundingChunkIndices || [];
 
-      // Find next word boundary after endIndex
+      // Find next word boundary after endIndex in ORIGINAL text
       let insertPos = endIndex;
-      while (insertPos < textWithMarkers.length) {
-        const char = textWithMarkers[insertPos];
+      while (insertPos < originalText.length) {
+        const char = originalText[insertPos];
         if (char === ' ' || char === '\n' || char === '.' || char === ',' || char === ';' || char === ':' || char === '!' || char === '?') {
           break;
         }
         insertPos++;
       }
 
-      // Wrap the citation text with a span for highlighting
-      const citedText = textWithMarkers.slice(startIndex, endIndex);
-      const wrappedText = `<span class="cited-text" data-citation="${originalIdx}">${citedText}</span>`;
+      modifications.push({
+        start: startIndex,
+        end: endIndex,
+        insertPos: insertPos,
+        citationIdx: idx,
+        chunkIndices: chunkIndices
+      });
+    });
 
-      // Create citation markers
-      const markers = chunkIndices.map(idx => `<span class="citation-marker" onclick="showCitation(${idx}, ${originalIdx})">${idx + 1}</span>`).join('');
+    // Sort by start position in reverse order
+    modifications.sort((a, b) => b.start - a.start);
 
-      // Replace the original text with wrapped version and add markers
-      textWithMarkers = textWithMarkers.slice(0, startIndex) + wrappedText + textWithMarkers.slice(endIndex, insertPos) + markers + textWithMarkers.slice(insertPos);
+    // Second pass: apply modifications from end to beginning
+    modifications.forEach(mod => {
+      const citedText = textWithMarkers.slice(mod.start, mod.end);
+      const wrappedText = `<span class="cited-text" data-citation="${mod.citationIdx}">${citedText}</span>`;
+      const markers = mod.chunkIndices.map(idx =>
+        `<span class="citation-marker" onclick="showCitation(${idx}, ${mod.citationIdx})">${idx + 1}</span>`
+      ).join('');
+
+      // Replace original segment with wrapped version and add markers at word boundary
+      textWithMarkers =
+        textWithMarkers.slice(0, mod.start) +
+        wrappedText +
+        textWithMarkers.slice(mod.end, mod.insertPos) +
+        markers +
+        textWithMarkers.slice(mod.insertPos);
     });
   }
 
