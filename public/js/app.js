@@ -342,7 +342,7 @@ function displaySearchResults(result) {
 
     result.groundingMetadata.groundingSupports.forEach((support, i) => {
       const chunkIndices = support.groundingChunkIndices || [];
-      const citedText = support.segment.text || '';
+      const citedText = support.segment.text || ''; // Keep for marker insertion
 
       // Get source documents for this citation
       const sources = chunkIndices.map(chunkIdx => {
@@ -362,7 +362,9 @@ function displaySearchResults(result) {
         // Use display indices (sequential 1, 2, 3...)
         const sourceLabels = sources.map(s => `[${s.displayIdx + 1}]`).join(' ');
 
-        const preview = citedText.length > 150 ? citedText.substring(0, 150) + '...' : citedText;
+        // Show the SOURCE EXCERPT (the actual evidence from the document)
+        const sourceExcerpt = sources[0].excerpt;
+        const preview = sourceExcerpt.length > 200 ? sourceExcerpt.substring(0, 200) + '...' : sourceExcerpt;
 
         citationsHtml += `
           <div class="citation-item" data-citation="${i}"
@@ -370,9 +372,9 @@ function displaySearchResults(result) {
                onmouseleave="clearHighlight()"
                onclick="scrollToDisplaySource(${sources[0].displayIdx})">
             <div class="citation-header">
-              <span class="citation-ref">Cited text supported by ${sourceLabels}</span>
+              <span class="citation-ref">${sourceLabels}</span>
             </div>
-            <div class="citation-preview">"${escapeHtml(preview)}"</div>
+            <div class="citation-preview">${escapeHtml(preview)}</div>
           </div>
         `;
       }
