@@ -72,8 +72,6 @@ router.delete('/stores/:name(*)', async (req, res) => {
 router.get('/stores/:name(*)/documents', async (req, res) => {
   try {
     const documents = await googleAI.listDocuments(req.params.name);
-    console.log(`Listed ${documents.length} documents for store ${req.params.name}`);
-    console.log('Documents array:', JSON.stringify(documents, null, 2));
     res.json({ success: true, documents });
   } catch (error) {
     console.error('Error listing documents:', error);
@@ -112,8 +110,6 @@ router.post('/stores/:name(*)/upload', upload.single('file'), async (req, res) =
       chunkingConfig,
       customMetadata
     );
-
-    console.log('Upload operation result:', JSON.stringify(result, null, 2));
 
     await fs.unlink(req.file.path);
 
