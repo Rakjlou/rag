@@ -288,6 +288,21 @@ function displaySearchResults(result) {
   if (result.groundingMetadata?.groundingSupports) {
     const answerDiv = document.getElementById('answer-text');
 
+    // Create mapping for display indices
+    const citedChunkIndices = new Set();
+    result.groundingMetadata.groundingSupports.forEach(support => {
+      support.groundingChunkIndices?.forEach(idx => citedChunkIndices.add(idx));
+    });
+
+    const chunkIndexToDisplayIndex = new Map();
+    let displayIdx = 0;
+    result.groundingMetadata.groundingChunks.forEach((chunk, originalIdx) => {
+      if (citedChunkIndices.has(originalIdx)) {
+        chunkIndexToDisplayIndex.set(originalIdx, displayIdx);
+        displayIdx++;
+      }
+    });
+
     // Process citations in reverse order to avoid position shifting
     const supports = [...result.groundingMetadata.groundingSupports].reverse();
 
@@ -297,30 +312,45 @@ function displaySearchResults(result) {
       const chunkIndices = support.groundingChunkIndices || [];
 
       if (citedText && chunkIndices.length > 0) {
+        // Convert to display indices
+        const displayIndices = chunkIndices.map(idx => chunkIndexToDisplayIndex.get(idx)).filter(idx => idx !== undefined);
         // Find and mark this text in the DOM
-        insertCitationMarker(answerDiv, citedText, chunkIndices, i);
+        insertCitationMarker(answerDiv, citedText, displayIndices, i);
       }
     });
   }
 
   // Display citations in sidebar
   if (result.groundingMetadata?.groundingChunks && result.groundingMetadata?.groundingSupports) {
-    let citationsHtml = '<div class="citations-list">';
-
-    // Track which chunks are actually cited
+    // First, figure out which chunks are cited and create a mapping
     const citedChunkIndices = new Set();
+    result.groundingMetadata.groundingSupports.forEach(support => {
+      support.groundingChunkIndices?.forEach(idx => citedChunkIndices.add(idx));
+    });
+
+    // Create a mapping from original chunk index to display index
+    const chunkIndexToDisplayIndex = new Map();
+    let displayIdx = 0;
+    result.groundingMetadata.groundingChunks.forEach((chunk, originalIdx) => {
+      if (citedChunkIndices.has(originalIdx)) {
+        chunkIndexToDisplayIndex.set(originalIdx, displayIdx);
+        displayIdx++;
+      }
+    });
+
+    let citationsHtml = '<div class="citations-list">';
 
     result.groundingMetadata.groundingSupports.forEach((support, i) => {
       const chunkIndices = support.groundingChunkIndices || [];
-      const citedText = support.segment.text || ''; // What the model wrote in its answer
+      const citedText = support.segment.text || '';
 
       // Get source documents for this citation
       const sources = chunkIndices.map(chunkIdx => {
         const chunk = result.groundingMetadata.groundingChunks[chunkIdx];
         if (chunk?.retrievedContext) {
-          citedChunkIndices.add(chunkIdx); // Track this chunk as cited
           return {
-            idx: chunkIdx,
+            originalIdx: chunkIdx,
+            displayIdx: chunkIndexToDisplayIndex.get(chunkIdx),
             title: chunk.retrievedContext.title || 'Unknown',
             excerpt: chunk.retrievedContext.text || ''
           };
@@ -329,16 +359,16 @@ function displaySearchResults(result) {
       }).filter(Boolean);
 
       if (sources.length > 0 && citedText) {
-        const sourceLabels = sources.map(s => `[${s.idx + 1}]`).join(' ');
+        // Use display indices (sequential 1, 2, 3...)
+        const sourceLabels = sources.map(s => `[${s.displayIdx + 1}]`).join(' ');
 
-        // Show WHAT WAS CITED (text from the answer) + which sources support it
         const preview = citedText.length > 150 ? citedText.substring(0, 150) + '...' : citedText;
 
         citationsHtml += `
           <div class="citation-item" data-citation="${i}"
                onmouseenter="highlightCitation(${i})"
                onmouseleave="clearHighlight()"
-               onclick="scrollToSource(${sources[0].idx})">
+               onclick="scrollToDisplaySource(${sources[0].displayIdx})">
             <div class="citation-header">
               <span class="citation-ref">Cited text supported by ${sourceLabels}</span>
             </div>
@@ -349,19 +379,20 @@ function displaySearchResults(result) {
     });
     citationsHtml += '</div>';
 
-    // Add source documents section - ONLY show chunks that were actually cited
+    // Add source documents section with sequential numbering
     citationsHtml += '<div class="sources-section"><h4>Source Documents</h4>';
-    result.groundingMetadata.groundingChunks.forEach((chunk, i) => {
+    let sourceDisplayIdx = 0;
+    result.groundingMetadata.groundingChunks.forEach((chunk, originalIdx) => {
       // Skip chunks that weren't cited
-      if (!citedChunkIndices.has(i)) return;
+      if (!citedChunkIndices.has(originalIdx)) return;
 
       if (chunk.retrievedContext) {
         const text = chunk.retrievedContext.text || '';
         const preview = text.length > 500 ? text.substring(0, 500) + '...' : text;
         citationsHtml += `
-          <div class="source-item" id="source-${i}">
+          <div class="source-item" id="display-source-${sourceDisplayIdx}">
             <div class="source-header">
-              <strong>[${i + 1}] ${escapeHtml(chunk.retrievedContext.title)}</strong>
+              <strong>[${sourceDisplayIdx + 1}] ${escapeHtml(chunk.retrievedContext.title)}</strong>
             </div>
             <details class="source-details">
               <summary>View full excerpt</summary>
@@ -369,14 +400,16 @@ function displaySearchResults(result) {
             </details>
           </div>
         `;
+        sourceDisplayIdx++;
       } else if (chunk.web) {
         citationsHtml += `
-          <div class="source-item" id="source-${i}">
+          <div class="source-item" id="display-source-${sourceDisplayIdx}">
             <div class="source-header">
-              <strong>[${i + 1}]</strong> <a href="${escapeHtml(chunk.web.uri)}" target="_blank">${escapeHtml(chunk.web.title || chunk.web.uri)}</a>
+              <strong>[${sourceDisplayIdx + 1}]</strong> <a href="${escapeHtml(chunk.web.uri)}" target="_blank">${escapeHtml(chunk.web.title || chunk.web.uri)}</a>
             </div>
           </div>
         `;
+        sourceDisplayIdx++;
       }
     });
     citationsHtml += '</div>';
@@ -456,13 +489,13 @@ function insertCitationMarker(container, citedText, chunkIndices, citationIdx) {
       marker.className = 'citation-markers';
       marker.setAttribute('data-citation', citationIdx);
 
-      chunkIndices.forEach(idx => {
+      chunkIndices.forEach(displayIdx => {
         const badge = document.createElement('span');
         badge.className = 'citation-marker';
-        badge.textContent = idx + 1;
+        badge.textContent = displayIdx + 1;
         badge.onclick = (e) => {
           e.stopPropagation();
-          scrollToSource(idx);
+          scrollToDisplaySource(displayIdx);
         };
         marker.appendChild(badge);
       });
@@ -559,11 +592,11 @@ function clearHighlight() {
   });
 }
 
-function scrollToSource(sourceIdx) {
+function scrollToDisplaySource(displayIdx) {
   openSidebar();
   switchTab('citations');
 
-  const sourceElement = document.getElementById(`source-${sourceIdx}`);
+  const sourceElement = document.getElementById(`display-source-${displayIdx}`);
   if (sourceElement) {
     sourceElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
     sourceElement.style.backgroundColor = 'var(--bg-light)';
@@ -571,6 +604,11 @@ function scrollToSource(sourceIdx) {
       sourceElement.style.backgroundColor = '';
     }, 2000);
   }
+}
+
+// Keep old function for backward compatibility
+function scrollToSource(sourceIdx) {
+  scrollToDisplaySource(sourceIdx);
 }
 
 function clearAllHighlights() {
