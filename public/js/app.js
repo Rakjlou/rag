@@ -320,15 +320,15 @@ function displaySearchResults(result) {
     });
   }
 
-  // Display citations in sidebar
+  // Display citations in sidebar - Wikipedia style (one entry per unique source)
   if (result.groundingMetadata?.groundingChunks && result.groundingMetadata?.groundingSupports) {
-    // First, figure out which chunks are cited and create a mapping
+    // First, collect all cited chunks and assign them sequential numbers
     const citedChunkIndices = new Set();
     result.groundingMetadata.groundingSupports.forEach(support => {
       support.groundingChunkIndices?.forEach(idx => citedChunkIndices.add(idx));
     });
 
-    // Create a mapping from original chunk index to display index
+    // Create a mapping from original chunk index to display index (Wikipedia-style numbering)
     const chunkIndexToDisplayIndex = new Map();
     let displayIdx = 0;
     result.groundingMetadata.groundingChunks.forEach((chunk, originalIdx) => {
@@ -338,52 +338,37 @@ function displaySearchResults(result) {
       }
     });
 
+    // Build citations list - one entry per unique source chunk
     let citationsHtml = '<div class="citations-list">';
 
-    result.groundingMetadata.groundingSupports.forEach((support, i) => {
-      const chunkIndices = support.groundingChunkIndices || [];
-      const citedText = support.segment.text || ''; // Keep for marker insertion
+    let sourceDisplayIdx = 0;
+    result.groundingMetadata.groundingChunks.forEach((chunk, originalIdx) => {
+      // Skip chunks that weren't cited
+      if (!citedChunkIndices.has(originalIdx)) return;
 
-      // Get source documents for this citation
-      const sources = chunkIndices.map(chunkIdx => {
-        const chunk = result.groundingMetadata.groundingChunks[chunkIdx];
-        if (chunk?.retrievedContext) {
-          return {
-            originalIdx: chunkIdx,
-            displayIdx: chunkIndexToDisplayIndex.get(chunkIdx),
-            title: chunk.retrievedContext.title || 'Unknown',
-            excerpt: chunk.retrievedContext.text || ''
-          };
-        }
-        return null;
-      }).filter(Boolean);
-
-      if (sources.length > 0 && citedText) {
-        // Use display indices (sequential 1, 2, 3...)
-        const sourceLabels = sources.map(s => `[${s.displayIdx + 1}]`).join(' ');
-
-        // Show the SOURCE EXCERPT (the actual evidence from the document)
-        const sourceExcerpt = sources[0].excerpt;
-        const preview = sourceExcerpt.length > 200 ? sourceExcerpt.substring(0, 200) + '...' : sourceExcerpt;
+      if (chunk.retrievedContext) {
+        const excerpt = chunk.retrievedContext.text || '';
+        const preview = excerpt.length > 200 ? excerpt.substring(0, 200) + '...' : excerpt;
+        const title = chunk.retrievedContext.title || 'Unknown';
 
         citationsHtml += `
-          <div class="citation-item" data-citation="${i}"
-               onmouseenter="highlightCitation(${i})"
-               onmouseleave="clearHighlight()"
-               onclick="scrollToDisplaySource(${sources[0].displayIdx})">
+          <div class="citation-item" data-source="${sourceDisplayIdx}"
+               onclick="scrollToDisplaySource(${sourceDisplayIdx})">
             <div class="citation-header">
-              <span class="citation-ref">${sourceLabels}</span>
+              <span class="citation-ref">[${sourceDisplayIdx + 1}]</span>
+              <span class="citation-doc">${escapeHtml(title)}</span>
             </div>
             <div class="citation-preview">${escapeHtml(preview)}</div>
           </div>
         `;
+        sourceDisplayIdx++;
       }
     });
     citationsHtml += '</div>';
 
-    // Add source documents section with sequential numbering
+    // Add source documents section with full excerpts
     citationsHtml += '<div class="sources-section"><h4>Source Documents</h4>';
-    let sourceDisplayIdx = 0;
+    sourceDisplayIdx = 0;
     result.groundingMetadata.groundingChunks.forEach((chunk, originalIdx) => {
       // Skip chunks that weren't cited
       if (!citedChunkIndices.has(originalIdx)) return;
