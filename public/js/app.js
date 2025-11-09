@@ -284,6 +284,25 @@ function displaySearchResults(result) {
     </div>
   `;
 
+  // Now insert citation markers into the DOM
+  if (result.groundingMetadata?.groundingSupports) {
+    const answerDiv = document.getElementById('answer-text');
+
+    // Process citations in reverse order to avoid position shifting
+    const supports = [...result.groundingMetadata.groundingSupports].reverse();
+
+    supports.forEach((support, reverseIdx) => {
+      const i = supports.length - 1 - reverseIdx; // Original index
+      const citedText = support.segment.text || '';
+      const chunkIndices = support.groundingChunkIndices || [];
+
+      if (citedText && chunkIndices.length > 0) {
+        // Find and mark this text in the DOM
+        insertCitationMarker(answerDiv, citedText, chunkIndices, i);
+      }
+    });
+  }
+
   // Display citations in sidebar
   if (result.groundingMetadata?.groundingChunks && result.groundingMetadata?.groundingSupports) {
     let citationsHtml = '<div class="citations-list">';
@@ -317,8 +336,8 @@ function displaySearchResults(result) {
         const preview = sourceExcerpt.length > 200 ? sourceExcerpt.substring(0, 200) + '...' : sourceExcerpt;
 
         citationsHtml += `
-          <div class="citation-item" data-citation="${i}" data-start="${support.segment.startIndex}" data-end="${support.segment.endIndex}"
-               onmouseenter="highlightCitedText(${support.segment.startIndex}, ${support.segment.endIndex})"
+          <div class="citation-item" data-citation="${i}"
+               onmouseenter="highlightCitation(${i})"
                onmouseleave="clearHighlight()"
                onclick="scrollToSource(${sources[0].idx})">
             <div class="citation-header">
@@ -374,6 +393,83 @@ function displaySearchResults(result) {
   }
 }
 
+// Insert citation markers into the DOM by finding the cited text
+function insertCitationMarker(container, citedText, chunkIndices, citationIdx) {
+  // Normalize the search text (remove extra whitespace)
+  const searchText = citedText.trim();
+  if (!searchText) return;
+
+  // Walk through all text nodes to find this text
+  const walker = document.createTreeWalker(
+    container,
+    NodeFilter.SHOW_TEXT,
+    null
+  );
+
+  let textNodes = [];
+  let node;
+  while (node = walker.nextNode()) {
+    textNodes.push(node);
+  }
+
+  // Build the full text content
+  let fullText = textNodes.map(n => n.textContent).join('');
+
+  // Find the text position (case-insensitive, ignore extra spaces)
+  const normalizedFull = fullText.replace(/\s+/g, ' ');
+  const normalizedSearch = searchText.replace(/\s+/g, ' ');
+  const startPos = normalizedFull.indexOf(normalizedSearch);
+
+  if (startPos === -1) {
+    console.log('Could not find cited text:', searchText.substring(0, 50));
+    return;
+  }
+
+  // Find the text node and offset where citation ends
+  let currentPos = 0;
+  let endPos = startPos + normalizedSearch.length;
+
+  for (let i = 0; i < textNodes.length; i++) {
+    const nodeText = textNodes[i].textContent;
+    const normalizedNodeText = nodeText.replace(/\s+/g, ' ');
+    const nodeLength = normalizedNodeText.length;
+    const nodeEnd = currentPos + nodeLength;
+
+    if (currentPos <= endPos && endPos <= nodeEnd) {
+      // Found the node containing the end of citation
+      // Insert marker after this text node
+      const marker = document.createElement('span');
+      marker.className = 'citation-markers';
+      marker.setAttribute('data-citation', citationIdx);
+
+      chunkIndices.forEach(idx => {
+        const badge = document.createElement('span');
+        badge.className = 'citation-marker';
+        badge.textContent = idx + 1;
+        badge.onclick = (e) => {
+          e.stopPropagation();
+          scrollToSource(idx);
+        };
+        marker.appendChild(badge);
+      });
+
+      // Insert after the text node
+      const parent = textNodes[i].parentNode;
+      if (parent && textNodes[i].nextSibling) {
+        parent.insertBefore(marker, textNodes[i].nextSibling);
+      } else if (parent) {
+        parent.appendChild(marker);
+      }
+
+      // Wrap the cited text for highlighting
+      wrapCitedText(textNodes, startPos, endPos, citationIdx);
+      return;
+    }
+
+    currentPos = nodeEnd;
+  }
+}
+
 function toggleDocumentDetails(element) {
   const details = element.querySelector('.document-details');
   if (details) {
@@ -424,88 +520,27 @@ function switchTab(tabName) {
   });
 }
 
-function highlightCitedText(startIdx, endIdx) {
-  if (!window.searchResult) return;
-
-  // Find the text in the answer
-  const answerDiv = document.getElementById('answer-text');
-  if (!answerDiv) return;
-
-  // Clear any existing highlights
-  clearHighlight();
-
-  // Walk through text nodes to find our text
-  const range = findTextRange(answerDiv, startIdx, endIdx);
-  if (range) {
-    // Create highlight span
-    const highlight = document.createElement('mark');
-    highlight.className = 'citation-highlight';
-    try {
-      range.surroundContents(highlight);
-      window.currentHighlight = highlight;
-    } catch (e) {
-      // If range spans multiple elements, use CSS highlight instead
-      console.log('Range spans multiple elements, using simpler highlight');
-    }
-  }
+// Wrap cited text with a span for highlighting
+function wrapCitedText(textNodes, startPos, endPos, citationIdx) {
+  // This is complex to do across multiple nodes, so let's use a simpler approach
+  // Just add a data attribute to track the citation for CSS-based highlighting
+  // The cited text wrapper will be added during marker insertion
 }
 
-function findTextRange(container, startIdx, endIdx) {
-  const walker = document.createTreeWalker(
-    container,
-    NodeFilter.SHOW_TEXT,
-    null
-  );
+function highlightCitation(citationIdx) {
+  // Clear previous highlights
+  clearHighlight();
 
-  let currentPos = 0;
-  let startNode = null;
-  let startOffset = 0;
-  let endNode = null;
-  let endOffset = 0;
-
-  let node;
-  while (node = walker.nextNode()) {
-    const nodeLength = node.textContent.length;
-    const nodeEnd = currentPos + nodeLength;
-
-    // Check if this node contains the start position
-    if (!startNode && currentPos <= startIdx && startIdx < nodeEnd) {
-      startNode = node;
-      startOffset = startIdx - currentPos;
-    }
-
-    // Check if this node contains the end position
-    if (currentPos < endIdx && endIdx <= nodeEnd) {
-      endNode = node;
-      endOffset = endIdx - currentPos;
-      break;
-    }
-
-    currentPos = nodeEnd;
-  }
-
-  if (startNode && endNode) {
-    const range = document.createRange();
-    range.setStart(startNode, startOffset);
-    range.setEnd(endNode, endOffset);
-    return range;
-  }
-
-  return null;
+  // Highlight the citation markers
+  const markers = document.querySelectorAll(`.citation-markers[data-citation="${citationIdx}"]`);
+  markers.forEach(marker => marker.classList.add('highlighted'));
 }
 
 function clearHighlight() {
-  if (window.currentHighlight) {
-    const parent = window.currentHighlight.parentNode;
-    if (parent) {
-      // Replace highlight with its text content
-      const text = document.createTextNode(window.currentHighlight.textContent);
-      parent.replaceChild(text, window.currentHighlight);
-      // Normalize to merge adjacent text nodes
-      parent.normalize();
-    }
-    window.currentHighlight = null;
-  }
+  // Remove all highlight classes from markers
+  document.querySelectorAll('.citation-markers.highlighted').forEach(el => {
+    el.classList.remove('highlighted');
+  });
 }
 
 function scrollToSource(sourceIdx) {
