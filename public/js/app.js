@@ -312,6 +312,7 @@ function displaySearchResults(result) {
 
     result.groundingMetadata.groundingSupports.forEach((support, i) => {
       const chunkIndices = support.groundingChunkIndices || [];
+      const citedText = support.segment.text || ''; // The actual text cited in the answer
 
       // Get source documents for this citation
       const sources = chunkIndices.map(chunkIdx => {
@@ -327,13 +328,12 @@ function displaySearchResults(result) {
         return null;
       }).filter(Boolean);
 
-      if (sources.length > 0) {
+      if (sources.length > 0 && citedText) {
         const sourceLabels = sources.map(s => `[${s.idx + 1}]`).join(' ');
         const sourceNames = sources.map(s => s.title).join(', ');
 
-        // Show excerpt from the FIRST source document (not model's response text)
-        const sourceExcerpt = sources[0].excerpt;
-        const preview = sourceExcerpt.length > 200 ? sourceExcerpt.substring(0, 200) + '...' : sourceExcerpt;
+        // Show the CITED text from the answer (what was actually referenced)
+        const preview = citedText.length > 150 ? citedText.substring(0, 150) + '...' : citedText;
 
         citationsHtml += `
           <div class="citation-item" data-citation="${i}"
@@ -397,7 +397,10 @@ function displaySearchResults(result) {
 function insertCitationMarker(container, citedText, chunkIndices, citationIdx) {
   // Normalize the search text (remove extra whitespace)
   const searchText = citedText.trim();
-  if (!searchText) return;
+  if (!searchText) {
+    console.log(`Citation ${citationIdx}: Empty cited text`);
+    return;
+  }
 
   // Walk through all text nodes to find this text
   const walker = document.createTreeWalker(
@@ -415,14 +418,27 @@ function insertCitationMarker(container, citedText, chunkIndices, citationIdx) {
   // Build the full text content
   let fullText = textNodes.map(n => n.textContent).join('');
 
-  // Find the text position (case-insensitive, ignore extra spaces)
-  const normalizedFull = fullText.replace(/\s+/g, ' ');
-  const normalizedSearch = searchText.replace(/\s+/g, ' ');
-  const startPos = normalizedFull.indexOf(normalizedSearch);
+  // Find the text position (normalize whitespace and try different strategies)
+  const normalizedFull = fullText.replace(/\s+/g, ' ').trim();
+  const normalizedSearch = searchText.replace(/\s+/g, ' ').trim();
 
+  let startPos = normalizedFull.indexOf(normalizedSearch);
+
+  // If not found, try case-insensitive
   if (startPos === -1) {
-    console.log('Could not find cited text:', searchText.substring(0, 50));
-    return;
+    const lowerFull = normalizedFull.toLowerCase();
+    const lowerSearch = normalizedSearch.toLowerCase();
+    startPos = lowerFull.indexOf(lowerSearch);
+
+    if (startPos === -1) {
+      console.log(`Citation ${citationIdx}: Could not find cited text:`, {
+        searchLength: normalizedSearch.length,
+        searchPreview: normalizedSearch.substring(0, 80),
+        fullTextLength: normalizedFull.length,
+        fullTextPreview: normalizedFull.substring(0, 200)
+      });
+      return;
+    }
   }
 
   // Find the text node and offset where citation ends
@@ -460,6 +476,8 @@ function insertCitationMarker(container, citedText, chunkIndices, citationIdx) {
       } else if (parent) {
         parent.appendChild(marker);
       }
+
+      console.log(`Citation ${citationIdx}: Marker inserted successfully for chunks [${chunkIndices.map(idx => idx + 1).join(', ')}]`);
 
       // Wrap the cited text for highlighting
       wrapCitedText(textNodes, startPos, endPos, citationIdx);
