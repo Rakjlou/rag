@@ -205,7 +205,7 @@ async function loadDocuments() {
     const data = await apiCall(`/stores/${encodeURIComponent(STORE_NAME)}/documents`);
     const documents = data.documents;
 
-    if (documents.length === 0) {
+    if (!documents || documents.length === 0) {
       container.innerHTML = '<p class="empty-state">No documents yet. Upload one to get started.</p>';
       return;
     }
@@ -220,6 +220,7 @@ async function loadDocuments() {
       </div>
     `).join('');
   } catch (error) {
+    console.error('Frontend error loading documents:', error);
     container.innerHTML = '<p class="error-state">Failed to load documents</p>';
   }
 }

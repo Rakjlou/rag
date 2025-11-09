@@ -71,15 +71,10 @@ router.delete('/stores/:name(*)', async (req, res) => {
 
 router.get('/stores/:name(*)/documents', async (req, res) => {
   try {
-    console.log(`Listing documents for store: ${req.params.name}`);
     const documents = await googleAI.listDocuments(req.params.name);
-    console.log(`Found ${documents.length} documents`);
     res.json({ success: true, documents });
   } catch (error) {
-    console.error('Error listing documents for store:', req.params.name);
-    console.error('Full error:', error);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
+    console.error('Error listing documents:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
