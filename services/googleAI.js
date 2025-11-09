@@ -54,11 +54,9 @@ export async function uploadFileToStore(filePath, storeName, displayName, mimeTy
   if (chunkingConfig) {
     config.chunkingConfig = chunkingConfig;
   }
-  if (customMetadata) {
+  if (customMetadata && customMetadata.length > 0) {
     config.customMetadata = customMetadata;
   }
-
-  console.log('Sending to Google API - config:', JSON.stringify(config, null, 2));
 
   let operation = await ai.fileSearchStores.uploadToFileSearchStore({
     file: filePath,
@@ -69,12 +67,6 @@ export async function uploadFileToStore(filePath, storeName, displayName, mimeTy
   while (!operation.done) {
     await new Promise(resolve => setTimeout(resolve, 1000));
     operation = await ai.operations.get({ operation });
-  }
-
-  // Fetch the actual document to see what displayName Google stored
-  if (operation.response?.documentName) {
-    const doc = await ai.fileSearchStores.documents.get({ name: operation.response.documentName });
-    console.log('Document after upload - displayName:', doc.displayName);
   }
 
   return operation;

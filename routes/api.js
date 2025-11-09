@@ -88,14 +88,13 @@ router.post('/stores/:name(*)/upload', upload.single('file'), async (req, res) =
     const storeName = req.params.name;
     const displayName = req.body.displayName || req.file.originalname;
 
-    console.log('Upload request - displayName:', displayName, '| originalname:', req.file.originalname, '| body.displayName:', req.body.displayName);
-
     const chunkingConfig = req.body.maxTokensPerChunk ? {
       maxTokensPerChunk: parseInt(req.body.maxTokensPerChunk),
       maxOverlapTokens: req.body.maxOverlapTokens ? parseInt(req.body.maxOverlapTokens) : undefined
     } : null;
 
-    let customMetadata = null;
+    // Build custom metadata, adding filename if not already present
+    let customMetadata = [];
     if (req.body.customMetadata) {
       const metadataObj = JSON.parse(req.body.customMetadata);
       customMetadata = Object.entries(metadataObj).map(([key, value]) => ({
@@ -104,13 +103,21 @@ router.post('/stores/:name(*)/upload', upload.single('file'), async (req, res) =
       }));
     }
 
+    // Always add the intended filename as metadata since Google ignores displayName
+    if (!customMetadata.some(m => m.key === 'filename')) {
+      customMetadata.push({
+        key: 'filename',
+        stringValue: displayName
+      });
+    }
+
     const result = await googleAI.uploadFileToStore(
       req.file.path,
       storeName,
       displayName,
       req.file.mimetype,
       chunkingConfig,
-      customMetadata
+      customMetadata.length > 0 ? customMetadata : null
     );
 
     await fs.unlink(req.file.path);
