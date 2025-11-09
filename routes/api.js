@@ -16,6 +16,7 @@ router.get('/stores', async (req, res) => {
     const stores = await googleAI.listStores();
     res.json({ success: true, stores });
   } catch (error) {
+    console.error('Error listing stores:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -29,6 +30,7 @@ router.post('/stores', async (req, res) => {
     const store = await googleAI.createStore(displayName);
     res.json({ success: true, store });
   } catch (error) {
+    console.error('Error creating store:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -38,6 +40,7 @@ router.get('/stores/:name(*)', async (req, res) => {
     const store = await googleAI.getStore(req.params.name);
     res.json({ success: true, store });
   } catch (error) {
+    console.error('Error getting store:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -51,6 +54,7 @@ router.patch('/stores/:name(*)', async (req, res) => {
     const store = await googleAI.updateStore(req.params.name, displayName);
     res.json({ success: true, store });
   } catch (error) {
+    console.error('Error updating store:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -60,6 +64,7 @@ router.delete('/stores/:name(*)', async (req, res) => {
     await googleAI.deleteStore(req.params.name);
     res.json({ success: true });
   } catch (error) {
+    console.error('Error deleting store:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -69,6 +74,7 @@ router.get('/stores/:name(*)/documents', async (req, res) => {
     const documents = await googleAI.listDocuments(req.params.name);
     res.json({ success: true, documents });
   } catch (error) {
+    console.error('Error listing documents:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -101,6 +107,7 @@ router.post('/stores/:name(*)/upload', upload.single('file'), async (req, res) =
 
     res.json({ success: true, result });
   } catch (error) {
+    console.error('Error uploading file:', error);
     if (req.file) {
       await fs.unlink(req.file.path).catch(() => {});
     }
@@ -133,6 +140,7 @@ router.post('/stores/:name(*)/import', async (req, res) => {
 
     res.json({ success: true, result });
   } catch (error) {
+    console.error('Error importing file:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -142,6 +150,7 @@ router.delete('/documents/:name(*)', async (req, res) => {
     await googleAI.deleteDocument(req.params.name);
     res.json({ success: true });
   } catch (error) {
+    console.error('Error deleting document:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -161,6 +170,7 @@ router.post('/search', async (req, res) => {
     const result = await googleAI.search(query, storeNames, model, metadataFilter);
     res.json({ success: true, result });
   } catch (error) {
+    console.error('Error searching:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

@@ -15,7 +15,7 @@ export async function createStore(displayName) {
   return operation;
 }
 
-export async function listStores(pageSize = 100) {
+export async function listStores(pageSize = 20) {
   const stores = [];
   const pager = await ai.fileSearchStores.list({
     config: { pageSize }
@@ -67,7 +67,7 @@ export async function uploadFileToStore(filePath, storeName, displayName, chunki
   return operation;
 }
 
-export async function listDocuments(storeName, pageSize = 100) {
+export async function listDocuments(storeName, pageSize = 20) {
   const documents = [];
   const pager = await ai.fileSearchStores.documents.list({
     parent: storeName,
