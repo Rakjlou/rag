@@ -268,6 +268,9 @@ function displaySearchResults(result) {
     return;
   }
 
+  // Log grounding metadata structure for debugging
+  console.log('Full grounding metadata:', JSON.stringify(result.groundingMetadata, null, 2));
+
   let html = `<div class="search-result-content">
     <h3>Answer</h3>
     <div class="answer-text">${escapeHtml(result.text).replace(/\n/g, '<br>')}</div>
