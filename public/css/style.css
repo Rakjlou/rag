@@ -454,9 +454,66 @@ code {
   padding: 1rem;
   border-radius: 4px;
   border: 1px solid var(--border-color);
+  margin-bottom: 0.75rem;
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+
+.document-item:hover {
+  box-shadow: var(--shadow);
+}
+
+.document-item.expanded {
+  box-shadow: var(--shadow);
+}
+
+.document-summary {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.document-main-info h4 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.document-meta {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.document-details {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.detail-row {
+  padding: 0.5rem 0;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.detail-row strong {
+  color: var(--text-secondary);
+  margin-right: 0.5rem;
+}
+
+.metadata-tag {
+  display: inline-block;
+  background: var(--bg-light);
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.85rem;
+  margin: 0.25rem 0.25rem 0 0;
+  color: var(--text-primary);
+}
+
+.btn-sm {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
 }
 
 .document-info h4 {

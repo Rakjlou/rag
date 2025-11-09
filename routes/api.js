@@ -88,6 +88,8 @@ router.post('/stores/:name(*)/upload', upload.single('file'), async (req, res) =
     const storeName = req.params.name;
     const displayName = req.body.displayName || req.file.originalname;
 
+    console.log('Upload request - displayName:', displayName, '| originalname:', req.file.originalname, '| body.displayName:', req.body.displayName);
+
     const chunkingConfig = req.body.maxTokensPerChunk ? {
       maxTokensPerChunk: parseInt(req.body.maxTokensPerChunk),
       maxOverlapTokens: req.body.maxOverlapTokens ? parseInt(req.body.maxOverlapTokens) : undefined

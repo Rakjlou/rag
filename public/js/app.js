@@ -212,15 +212,34 @@ async function loadDocuments() {
       return;
     }
 
-    container.innerHTML = documents.map(doc => `
-      <div class="document-item">
-        <div class="document-info">
-          <h4>${escapeHtml(doc.displayName || doc.name)}</h4>
-          <p class="document-name">${escapeHtml(doc.name)}</p>
+    container.innerHTML = documents.map(doc => {
+      const metadata = doc.customMetadata ? doc.customMetadata.map(m =>
+        `<span class="metadata-tag">${escapeHtml(m.key)}: ${escapeHtml(m.stringValue || m.numericValue)}</span>`
+      ).join('') : '';
+
+      const fileSize = doc.sizeBytes ? (parseInt(doc.sizeBytes) / 1024).toFixed(1) + ' KB' : 'Unknown';
+      const createDate = doc.createTime ? new Date(doc.createTime).toLocaleString() : 'Unknown';
+
+      return `
+        <div class="document-item" onclick="toggleDocumentDetails(this)">
+          <div class="document-summary">
+            <div class="document-main-info">
+              <h4>${escapeHtml(doc.displayName || doc.name)}</h4>
+              <span class="document-meta">${fileSize} • ${doc.mimeType || 'Unknown type'}</span>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteDocument('${escapeHtml(doc.name)}')">Delete</button>
+          </div>
+          <div class="document-details" style="display: none;">
+            <div class="detail-row"><strong>Full Name:</strong> ${escapeHtml(doc.name)}</div>
+            <div class="detail-row"><strong>Created:</strong> ${createDate}</div>
+            <div class="detail-row"><strong>Size:</strong> ${fileSize}</div>
+            <div class="detail-row"><strong>MIME Type:</strong> ${escapeHtml(doc.mimeType || 'Unknown')}</div>
+            <div class="detail-row"><strong>State:</strong> ${escapeHtml(doc.state || 'Unknown')}</div>
+            ${metadata ? `<div class="detail-row"><strong>Metadata:</strong><br>${metadata}</div>` : ''}
+          </div>
         </div>
-        <button class="btn btn-danger" onclick="deleteDocument('${escapeHtml(doc.name)}')">Delete</button>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   } catch (error) {
     console.error('Frontend error loading documents:', error);
     container.innerHTML = '<p class="error-state">Failed to load documents</p>';
@@ -270,6 +289,14 @@ function displaySearchResults(result) {
 
   html += '</div>';
   resultsDiv.innerHTML = html;
+}
+
+function toggleDocumentDetails(element) {
+  const details = element.querySelector('.document-details');
+  if (details) {
+    details.style.display = details.style.display === 'none' ? 'block' : 'none';
+    element.classList.toggle('expanded');
+  }
 }
 
 function showUploadModal() {
