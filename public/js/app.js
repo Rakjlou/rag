@@ -202,9 +202,11 @@ async function loadStoreDetails() {
 }
 
 async function loadDocuments() {
+  console.log('loadDocuments() called for store:', STORE_NAME);
   const container = document.getElementById('documents-container');
   try {
     const data = await apiCall(`/stores/${encodeURIComponent(STORE_NAME)}/documents`);
+    console.log('Received data:', data);
     const documents = data.documents;
 
     if (!documents || documents.length === 0) {
