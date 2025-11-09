@@ -73,6 +73,7 @@ router.get('/stores/:name(*)/documents', async (req, res) => {
   try {
     const documents = await googleAI.listDocuments(req.params.name);
     console.log(`Listed ${documents.length} documents for store ${req.params.name}`);
+    console.log('Documents array:', JSON.stringify(documents, null, 2));
     res.json({ success: true, documents });
   } catch (error) {
     console.error('Error listing documents:', error);
