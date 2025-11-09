@@ -99,6 +99,7 @@ router.post('/stores/:name(*)/upload', upload.single('file'), async (req, res) =
       req.file.path,
       storeName,
       displayName,
+      req.file.mimetype,
       chunkingConfig,
       customMetadata
     );

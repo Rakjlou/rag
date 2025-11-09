@@ -1,5 +1,4 @@
 import { GoogleGenAI } from '@google/genai';
-import mime from 'mime-types';
 
 const apiKey = process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY;
 
@@ -45,10 +44,9 @@ export async function deleteStore(name, force = true) {
   });
 }
 
-export async function uploadFileToStore(filePath, storeName, displayName, chunkingConfig = null, customMetadata = null) {
+export async function uploadFileToStore(filePath, storeName, displayName, mimeType, chunkingConfig = null, customMetadata = null) {
   const config = { displayName };
 
-  const mimeType = mime.lookup(filePath);
   if (mimeType) {
     config.mimeType = mimeType;
   }
