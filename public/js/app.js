@@ -132,7 +132,12 @@ if (typeof STORE_NAME !== 'undefined') {
       e.target.reset();
       progressDiv.textContent = '';
 
-      const docName = data.result?.response?.name || 'Unknown';
+      // Try multiple possible paths for the document name
+      const docName = data.result?.response?.name ||
+                      data.result?.name ||
+                      data.result?.response?.displayName ||
+                      data.result?.displayName ||
+                      'Document uploaded';
       showSuccess(`File uploaded and indexed successfully: ${docName}`);
       loadDocuments();
     } catch (error) {
