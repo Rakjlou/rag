@@ -312,6 +312,7 @@ function displaySearchResults(result) {
 
     result.groundingMetadata.groundingSupports.forEach((support, i) => {
       const chunkIndices = support.groundingChunkIndices || [];
+      const citedText = support.segment.text || ''; // What the model wrote in its answer
 
       // Get source documents for this citation
       const sources = chunkIndices.map(chunkIdx => {
@@ -327,13 +328,11 @@ function displaySearchResults(result) {
         return null;
       }).filter(Boolean);
 
-      if (sources.length > 0) {
+      if (sources.length > 0 && citedText) {
         const sourceLabels = sources.map(s => `[${s.idx + 1}]`).join(' ');
-        const sourceNames = sources.map(s => s.title).join(', ');
 
-        // Show the SOURCE EXCERPT (from the retrieved document)
-        const sourceExcerpt = sources[0].excerpt;
-        const preview = sourceExcerpt.length > 200 ? sourceExcerpt.substring(0, 200) + '...' : sourceExcerpt;
+        // Show WHAT WAS CITED (text from the answer) + which sources support it
+        const preview = citedText.length > 150 ? citedText.substring(0, 150) + '...' : citedText;
 
         citationsHtml += `
           <div class="citation-item" data-citation="${i}"
@@ -341,8 +340,7 @@ function displaySearchResults(result) {
                onmouseleave="clearHighlight()"
                onclick="scrollToSource(${sources[0].idx})">
             <div class="citation-header">
-              <span class="citation-ref">${sourceLabels}</span>
-              <span class="citation-doc">${escapeHtml(sourceNames)}</span>
+              <span class="citation-ref">Cited text supported by ${sourceLabels}</span>
             </div>
             <div class="citation-preview">"${escapeHtml(preview)}"</div>
           </div>
