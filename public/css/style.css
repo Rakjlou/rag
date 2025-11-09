@@ -671,11 +671,6 @@ code {
   border-left: 3px solid var(--primary-color);
   border-radius: 4px;
   transition: background 0.3s;
-  cursor: pointer;
-}
-
-.citation-item:hover {
-  background: #e8f0fe;
 }
 
 .citation-header {
@@ -704,11 +699,45 @@ code {
   text-align: right;
 }
 
-.citation-preview {
+.citation-details {
+  margin-top: 0.5rem;
+}
+
+.citation-details summary {
+  cursor: pointer;
   font-size: 0.85rem;
   color: var(--text-primary);
   line-height: 1.6;
   font-style: italic;
+  user-select: none;
+  padding: 0.25rem 0;
+  list-style-position: outside;
+}
+
+.citation-details summary:hover {
+  color: var(--primary-color);
+}
+
+.citation-details[open] summary {
+  margin-bottom: 0.5rem;
+  font-style: normal;
+  font-weight: 500;
+  color: var(--primary-color);
+}
+
+.citation-preview {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+.citation-full-text {
+  padding: 0.75rem;
+  background: #f9f9f9;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text-primary);
   margin-top: 0.5rem;
 }
 

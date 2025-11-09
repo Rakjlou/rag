@@ -338,7 +338,7 @@ function displaySearchResults(result) {
       }
     });
 
-    // Build citations list - one entry per unique source chunk
+    // Build citations list - one entry per unique source chunk with expandable full text
     let citationsHtml = '<div class="citations-list">';
 
     let sourceDisplayIdx = 0;
@@ -348,51 +348,28 @@ function displaySearchResults(result) {
 
       if (chunk.retrievedContext) {
         const excerpt = chunk.retrievedContext.text || '';
-        const preview = excerpt.length > 200 ? excerpt.substring(0, 200) + '...' : excerpt;
+        const preview = excerpt.length > 150 ? excerpt.substring(0, 150) + '...' : excerpt;
         const title = chunk.retrievedContext.title || 'Unknown';
 
         citationsHtml += `
-          <div class="citation-item" data-source="${sourceDisplayIdx}"
-               onclick="scrollToDisplaySource(${sourceDisplayIdx})">
+          <div class="citation-item" id="display-source-${sourceDisplayIdx}">
             <div class="citation-header">
               <span class="citation-ref">[${sourceDisplayIdx + 1}]</span>
               <span class="citation-doc">${escapeHtml(title)}</span>
             </div>
-            <div class="citation-preview">${escapeHtml(preview)}</div>
-          </div>
-        `;
-        sourceDisplayIdx++;
-      }
-    });
-    citationsHtml += '</div>';
-
-    // Add source documents section with full excerpts
-    citationsHtml += '<div class="sources-section"><h4>Source Documents</h4>';
-    sourceDisplayIdx = 0;
-    result.groundingMetadata.groundingChunks.forEach((chunk, originalIdx) => {
-      // Skip chunks that weren't cited
-      if (!citedChunkIndices.has(originalIdx)) return;
-
-      if (chunk.retrievedContext) {
-        const text = chunk.retrievedContext.text || '';
-        const preview = text.length > 500 ? text.substring(0, 500) + '...' : text;
-        citationsHtml += `
-          <div class="source-item" id="display-source-${sourceDisplayIdx}">
-            <div class="source-header">
-              <strong>[${sourceDisplayIdx + 1}] ${escapeHtml(chunk.retrievedContext.title)}</strong>
-            </div>
-            <details class="source-details">
-              <summary>View full excerpt</summary>
-              <div class="source-excerpt">${escapeHtml(preview).replace(/\n/g, '<br>')}</div>
+            <details class="citation-details">
+              <summary class="citation-preview">${escapeHtml(preview)}</summary>
+              <div class="citation-full-text">${escapeHtml(excerpt).replace(/\n/g, '<br>')}</div>
             </details>
           </div>
         `;
         sourceDisplayIdx++;
       } else if (chunk.web) {
         citationsHtml += `
-          <div class="source-item" id="display-source-${sourceDisplayIdx}">
-            <div class="source-header">
-              <strong>[${sourceDisplayIdx + 1}]</strong> <a href="${escapeHtml(chunk.web.uri)}" target="_blank">${escapeHtml(chunk.web.title || chunk.web.uri)}</a>
+          <div class="citation-item" id="display-source-${sourceDisplayIdx}">
+            <div class="citation-header">
+              <span class="citation-ref">[${sourceDisplayIdx + 1}]</span>
+              <a href="${escapeHtml(chunk.web.uri)}" target="_blank" class="citation-doc">${escapeHtml(chunk.web.title || chunk.web.uri)}</a>
             </div>
           </div>
         `;
