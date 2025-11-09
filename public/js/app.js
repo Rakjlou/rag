@@ -312,7 +312,6 @@ function displaySearchResults(result) {
 
     result.groundingMetadata.groundingSupports.forEach((support, i) => {
       const chunkIndices = support.groundingChunkIndices || [];
-      const citedText = support.segment.text || ''; // The actual text cited in the answer
 
       // Get source documents for this citation
       const sources = chunkIndices.map(chunkIdx => {
@@ -328,12 +327,13 @@ function displaySearchResults(result) {
         return null;
       }).filter(Boolean);
 
-      if (sources.length > 0 && citedText) {
+      if (sources.length > 0) {
         const sourceLabels = sources.map(s => `[${s.idx + 1}]`).join(' ');
         const sourceNames = sources.map(s => s.title).join(', ');
 
-        // Show the CITED text from the answer (what was actually referenced)
-        const preview = citedText.length > 150 ? citedText.substring(0, 150) + '...' : citedText;
+        // Show the SOURCE EXCERPT (from the retrieved document)
+        const sourceExcerpt = sources[0].excerpt;
+        const preview = sourceExcerpt.length > 200 ? sourceExcerpt.substring(0, 200) + '...' : sourceExcerpt;
 
         citationsHtml += `
           <div class="citation-item" data-citation="${i}"
