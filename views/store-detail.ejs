@@ -44,7 +44,10 @@
       </section>
 
       <section class="documents-section">
-        <h2>Documents</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h2 style="margin: 0;">Documents</h2>
+          <button class="btn btn-secondary" onclick="loadDocuments()" style="padding: 0.5rem 1rem;">Refresh</button>
+        </div>
         <div id="documents-container" class="documents-list">
           <div class="loading">Loading documents...</div>
         </div>
