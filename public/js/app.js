@@ -288,15 +288,17 @@ function displaySearchResults(result) {
   if (result.groundingMetadata?.groundingChunks && result.groundingMetadata?.groundingSupports) {
     let citationsHtml = '<div class="citations-list">';
 
+    // Track which chunks are actually cited
+    const citedChunkIndices = new Set();
+
     result.groundingMetadata.groundingSupports.forEach((support, i) => {
       const chunkIndices = support.groundingChunkIndices || [];
-      const citedText = support.segment.text || '';
-      const preview = citedText.length > 150 ? citedText.substring(0, 150) + '...' : citedText;
 
       // Get source documents for this citation
       const sources = chunkIndices.map(chunkIdx => {
         const chunk = result.groundingMetadata.groundingChunks[chunkIdx];
         if (chunk?.retrievedContext) {
+          citedChunkIndices.add(chunkIdx); // Track this chunk as cited
           return {
             idx: chunkIdx,
             title: chunk.retrievedContext.title || 'Unknown',
@@ -309,6 +311,10 @@ function displaySearchResults(result) {
       if (sources.length > 0) {
         const sourceLabels = sources.map(s => `[${s.idx + 1}]`).join(' ');
         const sourceNames = sources.map(s => s.title).join(', ');
+
+        // Show excerpt from the FIRST source document (not model's response text)
+        const sourceExcerpt = sources[0].excerpt;
+        const preview = sourceExcerpt.length > 200 ? sourceExcerpt.substring(0, 200) + '...' : sourceExcerpt;
 
         citationsHtml += `
           <div class="citation-item" data-citation="${i}" data-start="${support.segment.startIndex}" data-end="${support.segment.endIndex}"
@@ -326,9 +332,12 @@ function displaySearchResults(result) {
     });
     citationsHtml += '</div>';
 
-    // Add source documents section
+    // Add source documents section - ONLY show chunks that were actually cited
     citationsHtml += '<div class="sources-section"><h4>Source Documents</h4>';
     result.groundingMetadata.groundingChunks.forEach((chunk, i) => {
+      // Skip chunks that weren't cited
+      if (!citedChunkIndices.has(i)) return;
+
       if (chunk.retrievedContext) {
         const text = chunk.retrievedContext.text || '';
         const preview = text.length > 500 ? text.substring(0, 500) + '...' : text;
