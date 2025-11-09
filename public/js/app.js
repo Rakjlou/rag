@@ -213,15 +213,9 @@ async function loadDocuments() {
     }
 
     container.innerHTML = documents.map(doc => {
-      // Extract filename from metadata if available
-      const filenameMetadata = doc.customMetadata?.find(m => m.key === 'filename');
-      const displayTitle = filenameMetadata?.stringValue || doc.displayName || doc.name;
-
-      // Build metadata tags, excluding 'filename' since we show it as title
-      const metadata = doc.customMetadata ? doc.customMetadata
-        .filter(m => m.key !== 'filename')
-        .map(m => `<span class="metadata-tag">${escapeHtml(m.key)}: ${escapeHtml(m.stringValue || m.numericValue)}</span>`)
-        .join('') : '';
+      const metadata = doc.customMetadata ? doc.customMetadata.map(m =>
+        `<span class="metadata-tag">${escapeHtml(m.key)}: ${escapeHtml(m.stringValue || m.numericValue)}</span>`
+      ).join('') : '';
 
       const fileSize = doc.sizeBytes ? (parseInt(doc.sizeBytes) / 1024).toFixed(1) + ' KB' : 'Unknown';
       const createDate = doc.createTime ? new Date(doc.createTime).toLocaleString() : 'Unknown';
@@ -230,13 +224,14 @@ async function loadDocuments() {
         <div class="document-item" onclick="toggleDocumentDetails(this)">
           <div class="document-summary">
             <div class="document-main-info">
-              <h4>${escapeHtml(displayTitle)}</h4>
+              <h4>${escapeHtml(doc.displayName || doc.name)}</h4>
               <span class="document-meta">${fileSize} • ${doc.mimeType || 'Unknown type'}</span>
             </div>
             <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteDocument('${escapeHtml(doc.name)}')">Delete</button>
           </div>
           <div class="document-details" style="display: none;">
             <div class="detail-row"><strong>Document ID:</strong> ${escapeHtml(doc.name)}</div>
+            <div class="detail-row"><strong>Display Name:</strong> ${escapeHtml(doc.displayName || 'N/A')}</div>
             <div class="detail-row"><strong>Created:</strong> ${createDate}</div>
             <div class="detail-row"><strong>Size:</strong> ${fileSize}</div>
             <div class="detail-row"><strong>MIME Type:</strong> ${escapeHtml(doc.mimeType || 'Unknown')}</div>

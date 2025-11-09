@@ -93,8 +93,7 @@ router.post('/stores/:name(*)/upload', upload.single('file'), async (req, res) =
       maxOverlapTokens: req.body.maxOverlapTokens ? parseInt(req.body.maxOverlapTokens) : undefined
     } : null;
 
-    // Build custom metadata, adding filename if not already present
-    let customMetadata = [];
+    let customMetadata = null;
     if (req.body.customMetadata) {
       const metadataObj = JSON.parse(req.body.customMetadata);
       customMetadata = Object.entries(metadataObj).map(([key, value]) => ({
@@ -103,21 +102,13 @@ router.post('/stores/:name(*)/upload', upload.single('file'), async (req, res) =
       }));
     }
 
-    // Always add the intended filename as metadata since Google ignores displayName
-    if (!customMetadata.some(m => m.key === 'filename')) {
-      customMetadata.push({
-        key: 'filename',
-        stringValue: displayName
-      });
-    }
-
     const result = await googleAI.uploadFileToStore(
       req.file.path,
       storeName,
       displayName,
       req.file.mimetype,
       chunkingConfig,
-      customMetadata.length > 0 ? customMetadata : null
+      customMetadata
     );
 
     await fs.unlink(req.file.path);

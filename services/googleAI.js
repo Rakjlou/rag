@@ -54,7 +54,7 @@ export async function uploadFileToStore(filePath, storeName, displayName, mimeTy
   if (chunkingConfig) {
     config.chunkingConfig = chunkingConfig;
   }
-  if (customMetadata && customMetadata.length > 0) {
+  if (customMetadata) {
     config.customMetadata = customMetadata;
   }
 
