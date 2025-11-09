@@ -66,7 +66,7 @@ The server will run on `http://localhost:3000`
 - `GET /api/stores/:name/documents` - List documents in store
 - `POST /api/stores/:name/upload` - Upload file to store
   - Form data: `file`, optional: `displayName`, `customMetadata` (JSON string), `maxTokensPerChunk`, `maxOverlapTokens`
-  - Example metadata: `{"author": "John Doe", "year": "2025", "category": "research"}`
+  - Example metadata: `{"author": "Isaac Asimov", "genre": "Sci-Fi", "year": "1950"}` (converted to API format automatically)
 - `POST /api/stores/:name/import` - Import pre-uploaded file to store
   - Body: `{ "fileName": "files/xyz", "displayName": "...", "customMetadata": {...}, "maxTokensPerChunk": 512, "maxOverlapTokens": 50 }`
 - `DELETE /api/documents/:name` - Delete a document

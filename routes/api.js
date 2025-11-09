@@ -93,7 +93,14 @@ router.post('/stores/:name(*)/upload', upload.single('file'), async (req, res) =
       maxOverlapTokens: req.body.maxOverlapTokens ? parseInt(req.body.maxOverlapTokens) : undefined
     } : null;
 
-    const customMetadata = req.body.customMetadata ? JSON.parse(req.body.customMetadata) : null;
+    let customMetadata = null;
+    if (req.body.customMetadata) {
+      const metadataObj = JSON.parse(req.body.customMetadata);
+      customMetadata = Object.entries(metadataObj).map(([key, value]) => ({
+        key,
+        stringValue: String(value)
+      }));
+    }
 
     const result = await googleAI.uploadFileToStore(
       req.file.path,
