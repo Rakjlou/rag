@@ -274,9 +274,10 @@ function displaySearchResults(result) {
   window.searchResult = result;
 
   // Render answer with markdown and citation markers
-  let textWithMarkers = result.text;
+  let textWithPlaceholders = result.text;
+  const placeholderMap = {};
 
-  // Insert citation markers if we have grounding supports
+  // Insert placeholder markers if we have grounding supports
   if (result.groundingMetadata?.groundingSupports) {
     const supports = result.groundingMetadata.groundingSupports;
     const originalText = result.text;
@@ -310,25 +311,44 @@ function displaySearchResults(result) {
     // Sort by start position in reverse order
     modifications.sort((a, b) => b.start - a.start);
 
-    // Second pass: apply modifications from end to beginning
+    // Second pass: insert placeholders (markdown-safe)
     modifications.forEach(mod => {
-      const citedText = textWithMarkers.slice(mod.start, mod.end);
-      const wrappedText = `<span class="cited-text" data-citation="${mod.citationIdx}">${citedText}</span>`;
-      const markers = mod.chunkIndices.map(idx =>
-        `<span class="citation-marker" onclick="showCitation(${idx}, ${mod.citationIdx})">${idx + 1}</span>`
+      const citedText = textWithPlaceholders.slice(mod.start, mod.end);
+
+      // Create unique placeholders
+      const startPlaceholder = `{{CITE_START_${mod.citationIdx}}}`;
+      const endPlaceholder = `{{CITE_END_${mod.citationIdx}}}`;
+      const markerPlaceholders = mod.chunkIndices.map(idx =>
+        `{{MARKER_${idx}_${mod.citationIdx}}}`
       ).join('');
 
-      // Replace original segment with wrapped version and add markers at word boundary
-      textWithMarkers =
-        textWithMarkers.slice(0, mod.start) +
-        wrappedText +
-        textWithMarkers.slice(mod.end, mod.insertPos) +
-        markers +
-        textWithMarkers.slice(mod.insertPos);
+      // Store the actual HTML for later replacement
+      placeholderMap[startPlaceholder] = `<span class="cited-text" data-citation="${mod.citationIdx}">`;
+      placeholderMap[endPlaceholder] = `</span>`;
+      mod.chunkIndices.forEach(idx => {
+        placeholderMap[`{{MARKER_${idx}_${mod.citationIdx}}}`] =
+          `<span class="citation-marker" onclick="showCitation(${idx}, ${mod.citationIdx})">${idx + 1}</span>`;
+      });
+
+      // Insert placeholders
+      textWithPlaceholders =
+        textWithPlaceholders.slice(0, mod.start) +
+        startPlaceholder +
+        citedText +
+        endPlaceholder +
+        textWithPlaceholders.slice(mod.end, mod.insertPos) +
+        markerPlaceholders +
+        textWithPlaceholders.slice(mod.insertPos);
     });
   }
 
-  const answerHtml = marked.parse(textWithMarkers);
+  // Parse markdown with placeholders
+  let answerHtml = marked.parse(textWithPlaceholders);
+
+  // Replace placeholders with actual HTML
+  Object.keys(placeholderMap).forEach(placeholder => {
+    answerHtml = answerHtml.replace(new RegExp(escapeRegex(placeholder), 'g'), placeholderMap[placeholder]);
+  });
 
   // Display answer in main section
   resultsDiv.innerHTML = `
@@ -528,6 +548,10 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 document.addEventListener('click', (e) => {
