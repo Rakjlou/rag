@@ -582,33 +582,12 @@ code {
   padding: 0;
 }
 
-.citation-marker {
-  display: inline-block;
-  background: var(--primary-color);
-  color: white;
-  padding: 0.1rem 0.4rem;
-  border-radius: 3px;
-  font-size: 0.75em;
-  font-weight: 600;
-  margin: 0 0.2rem;
-  cursor: pointer;
-  transition: background 0.2s;
-  vertical-align: super;
-  line-height: 1;
-}
-
-.citation-marker:hover {
-  background: var(--primary-hover);
-}
-
-.cited-text {
-  transition: background-color 0.3s;
-}
-
-.cited-text.highlighted {
+/* Citation highlighting in answer text */
+mark.citation-highlight {
   background-color: #fff3cd;
-  padding: 0.2rem 0;
+  padding: 0.1rem 0.2rem;
   border-radius: 3px;
+  transition: background-color 0.3s;
 }
 
 .sources-list {
@@ -691,14 +670,12 @@ code {
   text-align: right;
 }
 
-.citation-excerpt {
+.citation-preview {
   font-size: 0.85rem;
   color: var(--text-primary);
   line-height: 1.6;
-  font-family: 'Courier New', monospace;
-  background: #f9f9f9;
-  padding: 0.5rem;
-  border-radius: 3px;
+  font-style: italic;
+  margin-top: 0.5rem;
 }
 
 .source-header {

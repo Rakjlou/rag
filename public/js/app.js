@@ -270,130 +270,63 @@ function displaySearchResults(result) {
     return;
   }
 
-  // Store original text for reference
+  // Store for citation highlighting
   window.searchResult = result;
 
-  // Render answer with markdown and citation markers
-  let textWithPlaceholders = result.text;
-  const placeholderMap = {};
-
-  // Insert placeholder markers if we have grounding supports
-  if (result.groundingMetadata?.groundingSupports) {
-    const supports = result.groundingMetadata.groundingSupports;
-    const originalText = result.text;
-
-    // First pass: calculate all positions and modifications based on original text
-    const modifications = [];
-    supports.forEach((support, idx) => {
-      const startIndex = support.segment.startIndex;
-      const endIndex = support.segment.endIndex;
-      const chunkIndices = support.groundingChunkIndices || [];
-
-      // Find next word boundary after endIndex in ORIGINAL text
-      let insertPos = endIndex;
-      while (insertPos < originalText.length) {
-        const char = originalText[insertPos];
-        if (char === ' ' || char === '\n' || char === '.' || char === ',' || char === ';' || char === ':' || char === '!' || char === '?') {
-          break;
-        }
-        insertPos++;
-      }
-
-      modifications.push({
-        start: startIndex,
-        end: endIndex,
-        insertPos: insertPos,
-        citationIdx: idx,
-        chunkIndices: chunkIndices
-      });
-    });
-
-    // Sort by start position in reverse order
-    modifications.sort((a, b) => b.start - a.start);
-
-    // Second pass: insert placeholders (markdown-safe)
-    modifications.forEach(mod => {
-      const citedText = textWithPlaceholders.slice(mod.start, mod.end);
-
-      // Create unique placeholders
-      const startPlaceholder = `{{CITE_START_${mod.citationIdx}}}`;
-      const endPlaceholder = `{{CITE_END_${mod.citationIdx}}}`;
-      const markerPlaceholders = mod.chunkIndices.map(idx =>
-        `{{MARKER_${idx}_${mod.citationIdx}}}`
-      ).join('');
-
-      // Store the actual HTML for later replacement
-      placeholderMap[startPlaceholder] = `<span class="cited-text" data-citation="${mod.citationIdx}">`;
-      placeholderMap[endPlaceholder] = `</span>`;
-      mod.chunkIndices.forEach(idx => {
-        placeholderMap[`{{MARKER_${idx}_${mod.citationIdx}}}`] =
-          `<span class="citation-marker" onclick="showCitation(${idx}, ${mod.citationIdx})">${idx + 1}</span>`;
-      });
-
-      // Insert placeholders
-      textWithPlaceholders =
-        textWithPlaceholders.slice(0, mod.start) +
-        startPlaceholder +
-        citedText +
-        endPlaceholder +
-        textWithPlaceholders.slice(mod.end, mod.insertPos) +
-        markerPlaceholders +
-        textWithPlaceholders.slice(mod.insertPos);
-    });
-  }
-
-  // Parse markdown with placeholders
-  let answerHtml = marked.parse(textWithPlaceholders);
-
-  // Replace placeholders with actual HTML
-  Object.keys(placeholderMap).forEach(placeholder => {
-    answerHtml = answerHtml.replace(new RegExp(escapeRegex(placeholder), 'g'), placeholderMap[placeholder]);
-  });
+  // Parse markdown directly - no placeholders, no modifications!
+  const answerHtml = marked.parse(result.text);
 
   // Display answer in main section
   resultsDiv.innerHTML = `
     <div class="search-result-content">
       <h3>Answer</h3>
-      <div class="answer-text">${answerHtml}</div>
+      <div class="answer-text" id="answer-text">${answerHtml}</div>
     </div>
   `;
 
   // Display citations in sidebar
-  if (result.groundingMetadata?.groundingChunks) {
-    let citationsHtml = '';
+  if (result.groundingMetadata?.groundingChunks && result.groundingMetadata?.groundingSupports) {
+    let citationsHtml = '<div class="citations-list">';
 
-    // Add grounding supports with citation details
-    if (result.groundingMetadata.groundingSupports) {
-      citationsHtml += '<div class="citations-list">';
-      result.groundingMetadata.groundingSupports.forEach((support, i) => {
-        const chunkIndices = support.groundingChunkIndices || [];
+    result.groundingMetadata.groundingSupports.forEach((support, i) => {
+      const chunkIndices = support.groundingChunkIndices || [];
+      const citedText = support.segment.text || '';
+      const preview = citedText.length > 150 ? citedText.substring(0, 150) + '...' : citedText;
 
-        // For each chunk referenced, show its excerpt
-        chunkIndices.forEach(chunkIdx => {
-          const chunk = result.groundingMetadata.groundingChunks[chunkIdx];
-          if (chunk && chunk.retrievedContext) {
-            const excerpt = chunk.retrievedContext.text || '';
-            const preview = excerpt.length > 300 ? excerpt.substring(0, 300) + '...' : excerpt;
-            const docName = chunk.retrievedContext.title || 'Unknown';
+      // Get source documents for this citation
+      const sources = chunkIndices.map(chunkIdx => {
+        const chunk = result.groundingMetadata.groundingChunks[chunkIdx];
+        if (chunk?.retrievedContext) {
+          return {
+            idx: chunkIdx,
+            title: chunk.retrievedContext.title || 'Unknown',
+            excerpt: chunk.retrievedContext.text || ''
+          };
+        }
+        return null;
+      }).filter(Boolean);
 
-            citationsHtml += `
-              <div class="citation-item" id="citation-${i}" data-citation="${i}"
-                   onmouseenter="highlightCitation(${i})"
-                   onmouseleave="unhighlightCitation(${i})">
-                <div class="citation-header">
-                  <span class="citation-ref">[${chunkIdx + 1}]</span>
-                  <span class="citation-doc">${escapeHtml(docName)}</span>
-                </div>
-                <div class="citation-excerpt">${escapeHtml(preview).replace(/\n/g, '<br>')}</div>
-              </div>
-            `;
-          }
-        });
-      });
-      citationsHtml += '</div>';
-    }
+      if (sources.length > 0) {
+        const sourceLabels = sources.map(s => `[${s.idx + 1}]`).join(' ');
+        const sourceNames = sources.map(s => s.title).join(', ');
 
-    // Add source documents with full excerpts
+        citationsHtml += `
+          <div class="citation-item" data-citation="${i}" data-start="${support.segment.startIndex}" data-end="${support.segment.endIndex}"
+               onmouseenter="highlightCitedText(${support.segment.startIndex}, ${support.segment.endIndex})"
+               onmouseleave="clearHighlight()"
+               onclick="scrollToSource(${sources[0].idx})">
+            <div class="citation-header">
+              <span class="citation-ref">${sourceLabels}</span>
+              <span class="citation-doc">${escapeHtml(sourceNames)}</span>
+            </div>
+            <div class="citation-preview">"${escapeHtml(preview)}"</div>
+          </div>
+        `;
+      }
+    });
+    citationsHtml += '</div>';
+
+    // Add source documents section
     citationsHtml += '<div class="sources-section"><h4>Source Documents</h4>';
     result.groundingMetadata.groundingChunks.forEach((chunk, i) => {
       if (chunk.retrievedContext) {
@@ -482,15 +415,94 @@ function switchTab(tabName) {
   });
 }
 
-function showCitation(sourceIdx, citationIdx) {
-  // Open sidebar and switch to citations tab
+function highlightCitedText(startIdx, endIdx) {
+  if (!window.searchResult) return;
+
+  // Find the text in the answer
+  const answerDiv = document.getElementById('answer-text');
+  if (!answerDiv) return;
+
+  // Clear any existing highlights
+  clearHighlight();
+
+  // Walk through text nodes to find our text
+  const range = findTextRange(answerDiv, startIdx, endIdx);
+  if (range) {
+    // Create highlight span
+    const highlight = document.createElement('mark');
+    highlight.className = 'citation-highlight';
+    try {
+      range.surroundContents(highlight);
+      window.currentHighlight = highlight;
+    } catch (e) {
+      // If range spans multiple elements, use CSS highlight instead
+      console.log('Range spans multiple elements, using simpler highlight');
+    }
+  }
+}
+
+function findTextRange(container, startIdx, endIdx) {
+  const walker = document.createTreeWalker(
+    container,
+    NodeFilter.SHOW_TEXT,
+    null
+  );
+
+  let currentPos = 0;
+  let startNode = null;
+  let startOffset = 0;
+  let endNode = null;
+  let endOffset = 0;
+
+  let node;
+  while (node = walker.nextNode()) {
+    const nodeLength = node.textContent.length;
+    const nodeEnd = currentPos + nodeLength;
+
+    // Check if this node contains the start position
+    if (!startNode && currentPos <= startIdx && startIdx < nodeEnd) {
+      startNode = node;
+      startOffset = startIdx - currentPos;
+    }
+
+    // Check if this node contains the end position
+    if (currentPos < endIdx && endIdx <= nodeEnd) {
+      endNode = node;
+      endOffset = endIdx - currentPos;
+      break;
+    }
+
+    currentPos = nodeEnd;
+  }
+
+  if (startNode && endNode) {
+    const range = document.createRange();
+    range.setStart(startNode, startOffset);
+    range.setEnd(endNode, endOffset);
+    return range;
+  }
+
+  return null;
+}
+
+function clearHighlight() {
+  if (window.currentHighlight) {
+    const parent = window.currentHighlight.parentNode;
+    if (parent) {
+      // Replace highlight with its text content
+      const text = document.createTextNode(window.currentHighlight.textContent);
+      parent.replaceChild(text, window.currentHighlight);
+      // Normalize to merge adjacent text nodes
+      parent.normalize();
+    }
+    window.currentHighlight = null;
+  }
+}
+
+function scrollToSource(sourceIdx) {
   openSidebar();
   switchTab('citations');
 
-  // Highlight the citation text in the answer
-  highlightCitation(citationIdx);
-
-  // Scroll to the source
   const sourceElement = document.getElementById(`source-${sourceIdx}`);
   if (sourceElement) {
     sourceElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -501,30 +513,8 @@ function showCitation(sourceIdx, citationIdx) {
   }
 }
 
-function highlightCitation(citationIdx) {
-  // Remove any existing highlights
-  document.querySelectorAll('.cited-text.highlighted').forEach(el => {
-    el.classList.remove('highlighted');
-  });
-
-  // Add highlight to the specific citation
-  const citedText = document.querySelector(`.cited-text[data-citation="${citationIdx}"]`);
-  if (citedText) {
-    citedText.classList.add('highlighted');
-  }
-}
-
-function unhighlightCitation(citationIdx) {
-  const citedText = document.querySelector(`.cited-text[data-citation="${citationIdx}"]`);
-  if (citedText) {
-    citedText.classList.remove('highlighted');
-  }
-}
-
 function clearAllHighlights() {
-  document.querySelectorAll('.cited-text.highlighted').forEach(el => {
-    el.classList.remove('highlighted');
-  });
+  clearHighlight();
 }
 
 function showUploadModal() {
@@ -548,10 +538,6 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
-}
-
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 document.addEventListener('click', (e) => {
