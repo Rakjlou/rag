@@ -27,11 +27,15 @@
     <div class="features">
       <div class="feature-card">
         <h3>Manage Stores</h3>
-        <p>Create and manage file search stores to organize your documents</p>
+        <p>Create, update, and manage file search stores to organize your documents</p>
       </div>
       <div class="feature-card">
-        <h3>Upload Documents</h3>
-        <p>Upload PDFs, Word docs, code files, and more (100+ formats supported)</p>
+        <h3>Upload & Tag Documents</h3>
+        <p>Upload files with custom metadata tags for filtering and context</p>
+      </div>
+      <div class="feature-card">
+        <h3>Metadata Filtering</h3>
+        <p>Filter search results by document metadata for precise queries</p>
       </div>
       <div class="feature-card">
         <h3>Natural Language Search</h3>
@@ -40,6 +44,10 @@
       <div class="feature-card">
         <h3>Citations & Sources</h3>
         <p>Get accurate answers with citations showing which documents were used</p>
+      </div>
+      <div class="feature-card">
+        <h3>File Import</h3>
+        <p>Import previously uploaded files into stores for organized indexing</p>
       </div>
     </div>
 
@@ -51,21 +59,23 @@
           <li><code>GET /api/stores</code> - List all stores</li>
           <li><code>POST /api/stores</code> - Create a new store</li>
           <li><code>GET /api/stores/:name</code> - Get store details</li>
+          <li><code>PATCH /api/stores/:name</code> - Update store name</li>
           <li><code>DELETE /api/stores/:name</code> - Delete a store</li>
         </ul>
       </div>
       <div class="endpoint-group">
         <h3>Documents</h3>
         <ul>
-          <li><code>GET /api/stores/:name/documents</code> - List documents in store</li>
-          <li><code>POST /api/stores/:name/upload</code> - Upload file to store</li>
+          <li><code>GET /api/stores/:name/documents</code> - List documents</li>
+          <li><code>POST /api/stores/:name/upload</code> - Upload with metadata</li>
+          <li><code>POST /api/stores/:name/import</code> - Import existing file</li>
           <li><code>DELETE /api/documents/:name</code> - Delete a document</li>
         </ul>
       </div>
       <div class="endpoint-group">
         <h3>Search</h3>
         <ul>
-          <li><code>POST /api/search</code> - Search across stores</li>
+          <li><code>POST /api/search</code> - Search with metadata filter</li>
         </ul>
       </div>
     </div>

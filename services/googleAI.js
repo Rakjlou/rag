@@ -44,10 +44,13 @@ export async function deleteStore(name, force = true) {
   });
 }
 
-export async function uploadFileToStore(filePath, storeName, displayName, chunkingConfig = null) {
+export async function uploadFileToStore(filePath, storeName, displayName, chunkingConfig = null, customMetadata = null) {
   const config = { displayName };
   if (chunkingConfig) {
     config.chunkingConfig = chunkingConfig;
+  }
+  if (customMetadata) {
+    config.customMetadata = customMetadata;
   }
 
   let operation = await ai.fileSearchStores.uploadToFileSearchStore({
@@ -90,15 +93,54 @@ export async function deleteDocument(name, force = true) {
   });
 }
 
-export async function search(query, storeNames, model = 'gemini-2.5-flash') {
+export async function updateStore(name, displayName) {
+  return await ai.fileSearchStores.update({
+    name,
+    config: { displayName }
+  });
+}
+
+export async function importFileToStore(fileName, storeName, displayName = null, chunkingConfig = null, customMetadata = null) {
+  const config = {};
+  if (displayName) {
+    config.displayName = displayName;
+  }
+  if (chunkingConfig) {
+    config.chunkingConfig = chunkingConfig;
+  }
+  if (customMetadata) {
+    config.customMetadata = customMetadata;
+  }
+
+  let operation = await ai.fileSearchStores.importFile({
+    fileName,
+    fileSearchStoreName: storeName,
+    config
+  });
+
+  while (!operation.done) {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    operation = await ai.operations.get({ operation });
+  }
+
+  return operation;
+}
+
+export async function search(query, storeNames, model = 'gemini-2.5-flash', metadataFilter = null) {
+  const fileSearchConfig = {
+    fileSearchStoreNames: storeNames
+  };
+
+  if (metadataFilter) {
+    fileSearchConfig.metadataFilter = metadataFilter;
+  }
+
   const response = await ai.models.generateContent({
     model,
     contents: query,
     config: {
       tools: [{
-        fileSearch: {
-          fileSearchStoreNames: storeNames
-        }
+        fileSearch: fileSearchConfig
       }]
     }
   });

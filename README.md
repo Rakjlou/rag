@@ -4,8 +4,11 @@ A complete web interface to interact with Google's File Search API, built with N
 
 ## Features
 
-- **Store Management**: Create, list, view, and delete file search stores
-- **Document Upload**: Upload files (PDF, DOCX, code files, 100+ formats) with custom chunking config
+- **Store Management**: Create, list, view, update, and delete file search stores
+- **Document Upload**: Upload files (PDF, DOCX, code files, 100+ formats) with custom chunking config and metadata
+- **File Import**: Import previously uploaded files into stores
+- **Custom Metadata**: Tag documents with custom key-value pairs for filtering and context
+- **Metadata Filtering**: Filter search results by document metadata
 - **Natural Language Search**: Query documents using conversational language with AI-powered RAG
 - **Citations**: View sources and grounding metadata for search results
 - **RESTful API**: All features accessible via API endpoints
@@ -54,19 +57,25 @@ The server will run on `http://localhost:3000`
 - `POST /api/stores` - Create a new store
   - Body: `{ "displayName": "My Store" }`
 - `GET /api/stores/:name` - Get store details
+- `PATCH /api/stores/:name` - Update store display name
+  - Body: `{ "displayName": "New Name" }`
 - `DELETE /api/stores/:name` - Delete a store
 
 ### Documents
 
 - `GET /api/stores/:name/documents` - List documents in store
 - `POST /api/stores/:name/upload` - Upload file to store
-  - Form data: `file`, optional: `displayName`, `maxTokensPerChunk`, `maxOverlapTokens`
+  - Form data: `file`, optional: `displayName`, `customMetadata` (JSON string), `maxTokensPerChunk`, `maxOverlapTokens`
+  - Example metadata: `{"author": "John Doe", "year": "2025", "category": "research"}`
+- `POST /api/stores/:name/import` - Import pre-uploaded file to store
+  - Body: `{ "fileName": "files/xyz", "displayName": "...", "customMetadata": {...}, "maxTokensPerChunk": 512, "maxOverlapTokens": 50 }`
 - `DELETE /api/documents/:name` - Delete a document
 
 ### Search
 
 - `POST /api/search` - Search across stores
-  - Body: `{ "query": "your question", "storeNames": ["store-name"], "model": "gemini-2.5-flash" }`
+  - Body: `{ "query": "your question", "storeNames": ["store-name"], "model": "gemini-2.5-flash", "metadataFilter": "author=John Doe" }`
+  - Metadata filter syntax: `key=value` (follows google.aip.dev/160 specification)
 
 ## Web Interface
 

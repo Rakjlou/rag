@@ -42,6 +42,19 @@ router.get('/stores/:name(*)', async (req, res) => {
   }
 });
 
+router.patch('/stores/:name(*)', async (req, res) => {
+  try {
+    const { displayName } = req.body;
+    if (!displayName) {
+      return res.status(400).json({ success: false, error: 'displayName is required' });
+    }
+    const store = await googleAI.updateStore(req.params.name, displayName);
+    res.json({ success: true, store });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.delete('/stores/:name(*)', async (req, res) => {
   try {
     await googleAI.deleteStore(req.params.name);
@@ -74,11 +87,14 @@ router.post('/stores/:name(*)/upload', upload.single('file'), async (req, res) =
       maxOverlapTokens: req.body.maxOverlapTokens ? parseInt(req.body.maxOverlapTokens) : undefined
     } : null;
 
+    const customMetadata = req.body.customMetadata ? JSON.parse(req.body.customMetadata) : null;
+
     const result = await googleAI.uploadFileToStore(
       req.file.path,
       storeName,
       displayName,
-      chunkingConfig
+      chunkingConfig,
+      customMetadata
     );
 
     await fs.unlink(req.file.path);
@@ -88,6 +104,35 @@ router.post('/stores/:name(*)/upload', upload.single('file'), async (req, res) =
     if (req.file) {
       await fs.unlink(req.file.path).catch(() => {});
     }
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/stores/:name(*)/import', async (req, res) => {
+  try {
+    const { fileName, displayName, maxTokensPerChunk, maxOverlapTokens, customMetadata } = req.body;
+
+    if (!fileName) {
+      return res.status(400).json({ success: false, error: 'fileName is required' });
+    }
+
+    const storeName = req.params.name;
+
+    const chunkingConfig = maxTokensPerChunk ? {
+      maxTokensPerChunk: parseInt(maxTokensPerChunk),
+      maxOverlapTokens: maxOverlapTokens ? parseInt(maxOverlapTokens) : undefined
+    } : null;
+
+    const result = await googleAI.importFileToStore(
+      fileName,
+      storeName,
+      displayName,
+      chunkingConfig,
+      customMetadata
+    );
+
+    res.json({ success: true, result });
+  } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -103,7 +148,7 @@ router.delete('/documents/:name(*)', async (req, res) => {
 
 router.post('/search', async (req, res) => {
   try {
-    const { query, storeNames, model } = req.body;
+    const { query, storeNames, model, metadataFilter } = req.body;
 
     if (!query) {
       return res.status(400).json({ success: false, error: 'query is required' });
@@ -113,7 +158,7 @@ router.post('/search', async (req, res) => {
       return res.status(400).json({ success: false, error: 'storeNames array is required' });
     }
 
-    const result = await googleAI.search(query, storeNames, model);
+    const result = await googleAI.search(query, storeNames, model, metadataFilter);
     res.json({ success: true, result });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

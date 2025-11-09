@@ -143,22 +143,48 @@ if (typeof STORE_NAME !== 'undefined') {
     e.preventDefault();
     const formData = new FormData(e.target);
     const query = formData.get('query');
+    const metadataFilter = formData.get('metadataFilter');
 
     const resultsDiv = document.getElementById('search-results');
     resultsDiv.innerHTML = '<div class="loading">Searching...</div>';
 
     try {
+      const searchPayload = {
+        query,
+        storeNames: [STORE_NAME]
+      };
+
+      if (metadataFilter && metadataFilter.trim()) {
+        searchPayload.metadataFilter = metadataFilter.trim();
+      }
+
       const data = await apiCall('/search', {
         method: 'POST',
-        body: JSON.stringify({
-          query,
-          storeNames: [STORE_NAME]
-        })
+        body: JSON.stringify(searchPayload)
       });
 
       displaySearchResults(data.result);
     } catch (error) {
       resultsDiv.innerHTML = '<p class="error-state">Search failed</p>';
+    }
+  });
+
+  document.getElementById('rename-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const displayName = formData.get('displayName');
+
+    try {
+      await apiCall(`/stores/${encodeURIComponent(STORE_NAME)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ displayName })
+      });
+
+      hideRenameModal();
+      e.target.reset();
+      showSuccess('Store renamed successfully');
+      loadStoreDetails();
+    } catch (error) {
     }
   });
 }
@@ -250,6 +276,14 @@ function showUploadModal() {
 function hideUploadModal() {
   document.getElementById('upload-modal').classList.remove('show');
   document.getElementById('upload-progress').textContent = '';
+}
+
+function showRenameModal() {
+  document.getElementById('rename-modal').classList.add('show');
+}
+
+function hideRenameModal() {
+  document.getElementById('rename-modal').classList.remove('show');
 }
 
 function escapeHtml(text) {
