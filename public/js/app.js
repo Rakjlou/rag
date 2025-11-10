@@ -390,10 +390,20 @@ function displaySearchResults(result) {
 
 // Insert citation markers into the DOM by finding the cited text
 function insertCitationMarker(container, citedText, chunkIndices, citationIdx) {
-  // Normalize the search text (remove extra whitespace)
-  const searchText = citedText.trim();
+  // Strip markdown formatting and normalize the search text
+  let searchText = citedText.trim();
+
+  // Remove common markdown syntax that won't appear in rendered text
+  searchText = searchText
+    .replace(/\*\*/g, '')      // Remove bold markers **text**
+    .replace(/\*/g, '')        // Remove italic markers *text*
+    .replace(/#{1,6}\s/g, '')  // Remove heading markers # text
+    .replace(/`/g, '')         // Remove code markers `text`
+    .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')  // Remove links [text](url) -> text
+    .trim();
+
   if (!searchText) {
-    console.log(`Citation ${citationIdx}: Empty cited text`);
+    console.log(`Citation ${citationIdx}: Empty cited text after cleaning`);
     return;
   }
 
