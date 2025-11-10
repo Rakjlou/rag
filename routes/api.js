@@ -89,8 +89,10 @@ router.post('/stores/:name(*)/upload', upload.single('file'), async (req, res) =
     const displayName = req.body.displayName || req.file.originalname;
 
     const chunkingConfig = req.body.maxTokensPerChunk ? {
-      maxTokensPerChunk: parseInt(req.body.maxTokensPerChunk),
-      maxOverlapTokens: req.body.maxOverlapTokens ? parseInt(req.body.maxOverlapTokens) : undefined
+      white_space_config: {
+        max_tokens_per_chunk: parseInt(req.body.maxTokensPerChunk),
+        max_overlap_tokens: req.body.maxOverlapTokens ? parseInt(req.body.maxOverlapTokens) : undefined
+      }
     } : null;
 
     let customMetadata = null;
@@ -134,8 +136,10 @@ router.post('/stores/:name(*)/import', async (req, res) => {
     const storeName = req.params.name;
 
     const chunkingConfig = maxTokensPerChunk ? {
-      maxTokensPerChunk: parseInt(maxTokensPerChunk),
-      maxOverlapTokens: maxOverlapTokens ? parseInt(maxOverlapTokens) : undefined
+      white_space_config: {
+        max_tokens_per_chunk: parseInt(maxTokensPerChunk),
+        max_overlap_tokens: maxOverlapTokens ? parseInt(maxOverlapTokens) : undefined
+      }
     } : null;
 
     const result = await googleAI.importFileToStore(
