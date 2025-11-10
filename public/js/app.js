@@ -273,21 +273,10 @@ function displaySearchResults(result) {
   // Store for citation highlighting
   window.searchResult = result;
 
-  // Parse markdown directly - no placeholders, no modifications!
-  const answerHtml = marked.parse(result.text);
+  // NEW APPROACH: Insert citation markers in the TEXT before rendering markdown
+  let answerText = result.text;
 
-  // Display answer in main section
-  resultsDiv.innerHTML = `
-    <div class="search-result-content">
-      <h3>Answer</h3>
-      <div class="answer-text" id="answer-text">${answerHtml}</div>
-    </div>
-  `;
-
-  // Now insert citation markers into the DOM
   if (result.groundingMetadata?.groundingSupports) {
-    const answerDiv = document.getElementById('answer-text');
-
     // Create mapping for display indices
     const citedChunkIndices = new Set();
     result.groundingMetadata.groundingSupports.forEach(support => {
@@ -303,22 +292,24 @@ function displaySearchResults(result) {
       }
     });
 
-    // Process citations in reverse order to avoid position shifting
-    const supports = [...result.groundingMetadata.groundingSupports].reverse();
-
-    supports.forEach((support, reverseIdx) => {
-      const i = supports.length - 1 - reverseIdx; // Original index
-      const citedText = support.segment.text || '';
-      const chunkIndices = support.groundingChunkIndices || [];
-
-      if (citedText && chunkIndices.length > 0) {
-        // Convert to display indices
-        const displayIndices = chunkIndices.map(idx => chunkIndexToDisplayIndex.get(idx)).filter(idx => idx !== undefined);
-        // Find and mark this text in the DOM
-        insertCitationMarker(answerDiv, citedText, displayIndices, i);
-      }
-    });
+    // Process citations and insert markers in the text
+    answerText = insertCitationMarkersInText(
+      answerText,
+      result.groundingMetadata.groundingSupports,
+      chunkIndexToDisplayIndex
+    );
   }
+
+  // Now render the markdown with markers already inserted
+  const answerHtml = marked.parse(answerText);
+
+  // Display answer in main section
+  resultsDiv.innerHTML = `
+    <div class="search-result-content">
+      <h3>Answer</h3>
+      <div class="answer-text" id="answer-text">${answerHtml}</div>
+    </div>
+  `;
 
   // Display citations in sidebar - Wikipedia style (one entry per unique source)
   if (result.groundingMetadata?.groundingChunks && result.groundingMetadata?.groundingSupports) {
@@ -401,155 +392,116 @@ function displaySearchResults(result) {
   }
 }
 
-// Insert citation markers into the DOM by finding the cited text
-function insertCitationMarker(container, citedText, chunkIndices, citationIdx) {
-  // Strip markdown formatting and normalize the search text
-  let searchText = citedText.trim();
+// Insert citation markers into the TEXT before rendering (new simple approach)
+function insertCitationMarkersInText(text, groundingSupports, chunkIndexToDisplayIndex) {
+  // Collect all citation modifications (wrapping + markers) with their positions
+  const modifications = [];
 
-  // Remove common markdown syntax that won't appear in rendered text
-  searchText = searchText
-    .replace(/\*\*/g, '')      // Remove bold markers **text**
-    .replace(/\*/g, '')        // Remove italic markers *text*
-    .replace(/#{1,6}\s/g, '')  // Remove heading markers # text
-    .replace(/`/g, '')         // Remove code markers `text`
-    .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')  // Remove links [text](url) -> text
-    .trim();
+  groundingSupports.forEach((support, citationIdx) => {
+    const citedText = support.segment.text?.trim() || '';
+    const chunkIndices = support.groundingChunkIndices || [];
 
-  if (!searchText) {
-    console.log(`Citation ${citationIdx}: Empty cited text after cleaning`);
-    return;
-  }
+    if (!citedText || chunkIndices.length === 0) return;
 
-  // Walk through all text nodes to find this text
-  const walker = document.createTreeWalker(
-    container,
-    NodeFilter.SHOW_TEXT,
-    null
-  );
+    // Convert to display indices
+    const displayIndices = chunkIndices
+      .map(idx => chunkIndexToDisplayIndex.get(idx))
+      .filter(idx => idx !== undefined);
 
-  let textNodes = [];
-  let node;
-  while (node = walker.nextNode()) {
-    textNodes.push(node);
-  }
+    if (displayIndices.length === 0) return;
 
-  // Build the full text content
-  let fullText = textNodes.map(n => n.textContent).join('');
+    // Find the cited text in the source text
+    const result = findCitedTextPositionAndLength(text, citedText);
 
-  // Find the text position (normalize whitespace and try different strategies)
-  const normalizedFull = fullText.replace(/\s+/g, ' ').trim();
-  const normalizedSearch = searchText.replace(/\s+/g, ' ').trim();
+    if (result.position !== -1) {
+      // Find the end of the word/sentence containing the cited text
+      const insertPos = findWordBoundaryAfter(text, result.position + result.length);
 
-  let startPos = normalizedFull.indexOf(normalizedSearch);
-
-  // If not found, try case-insensitive
-  if (startPos === -1) {
-    const lowerFull = normalizedFull.toLowerCase();
-    const lowerSearch = normalizedSearch.toLowerCase();
-    startPos = lowerFull.indexOf(lowerSearch);
-
-    if (startPos === -1) {
-      console.log(`Citation ${citationIdx}: Could not find cited text:`, {
-        searchLength: normalizedSearch.length,
-        searchPreview: normalizedSearch.substring(0, 80),
-        fullTextLength: normalizedFull.length,
-        fullTextPreview: normalizedFull.substring(0, 200)
+      modifications.push({
+        startPos: result.position,
+        endPos: result.position + result.length,
+        markerPos: insertPos,
+        citationIdx,
+        displayIndices
       });
-      return;
     }
-  }
+  });
 
-  // Find the text node and offset where citation ends
-  let currentPos = 0;
-  let endPos = startPos + normalizedSearch.length;
+  // Sort modifications by position (descending) to modify from end to start
+  modifications.sort((a, b) => b.startPos - a.startPos);
 
-  // Find start and end nodes/offsets for wrapping
-  let startNode = null, startOffset = 0;
-  let endNode = null, endOffset = 0;
-  let foundStart = false;
+  // Apply modifications from end to start (to preserve positions)
+  let modifiedText = text;
+  modifications.forEach(mod => {
+    // Create marker HTML
+    const badges = mod.displayIndices
+      .map(idx => `<span class="citation-marker" onclick="event.stopPropagation(); highlightCitation(${mod.citationIdx}); scrollToDisplaySource(${idx});">${idx + 1}</span>`)
+      .join('');
+    const marker = `<span class="citation-markers" data-citation="${mod.citationIdx}">${badges}</span>`;
 
-  for (let i = 0; i < textNodes.length; i++) {
-    const nodeText = textNodes[i].textContent;
-    const normalizedNodeText = nodeText.replace(/\s+/g, ' ');
-    const nodeLength = normalizedNodeText.length;
-    const nodeEnd = currentPos + nodeLength;
+    // Extract all the text parts (do this before any modifications)
+    const beforeCitation = modifiedText.slice(0, mod.startPos);
+    const citedTextContent = modifiedText.slice(mod.startPos, mod.endPos);
+    const betweenCitedAndMarker = modifiedText.slice(mod.endPos, mod.markerPos);
+    const afterMarker = modifiedText.slice(mod.markerPos);
 
-    // Find start position
-    if (!foundStart && currentPos <= startPos && startPos < nodeEnd) {
-      startNode = textNodes[i];
-      // Map normalized position back to original text
-      const normalizedOffset = startPos - currentPos;
-      startOffset = mapNormalizedToOriginal(nodeText, normalizedOffset);
-      foundStart = true;
-    }
+    // Wrap the cited text
+    const wrappedCitedText = `<span class="cited-text" data-citation="${mod.citationIdx}">${citedTextContent}</span>`;
 
-    // Find end position
-    if (currentPos <= endPos && endPos <= nodeEnd) {
-      endNode = textNodes[i];
-      const normalizedOffset = endPos - currentPos;
-      endOffset = mapNormalizedToOriginal(nodeText, normalizedOffset);
+    // Reconstruct: before + wrapped citation + between + marker + after
+    modifiedText = beforeCitation + wrappedCitedText + betweenCitedAndMarker + marker + afterMarker;
+  });
 
-      // Wrap the cited text
-      if (startNode && endNode) {
-        wrapCitedText(startNode, startOffset, endNode, endOffset, citationIdx);
-      }
-
-      // Insert marker after the end node
-      const marker = document.createElement('span');
-      marker.className = 'citation-markers';
-      marker.setAttribute('data-citation', citationIdx);
-
-      chunkIndices.forEach(displayIdx => {
-        const badge = document.createElement('span');
-        badge.className = 'citation-marker';
-        badge.textContent = displayIdx + 1;
-        badge.onclick = (e) => {
-          e.stopPropagation();
-          highlightCitation(citationIdx);
-          scrollToDisplaySource(displayIdx);
-        };
-        marker.appendChild(badge);
-      });
-
-      // Insert after the end node
-      const parent = endNode.parentNode;
-      if (parent && endNode.nextSibling) {
-        parent.insertBefore(marker, endNode.nextSibling);
-      } else if (parent) {
-        parent.appendChild(marker);
-      }
-
-      console.log(`Citation ${citationIdx}: Marker inserted successfully for chunks [${chunkIndices.map(idx => idx + 1).join(', ')}]`);
-      return;
-    }
-
-    currentPos = nodeEnd;
-  }
+  return modifiedText;
 }
 
-// Map a position in normalized text back to original text position
-function mapNormalizedToOriginal(originalText, normalizedPos) {
-  let originalIdx = 0;
-  let normalizedIdx = 0;
-  let inWhitespace = false;
+// Find cited text in source text, handling markdown syntax
+// Returns { position, length } where length is the actual matched text length in source
+function findCitedTextPositionAndLength(text, citedText) {
+  // First try exact match
+  let pos = text.indexOf(citedText);
+  if (pos !== -1) return { position: pos, length: citedText.length };
 
-  while (originalIdx < originalText.length && normalizedIdx < normalizedPos) {
-    const char = originalText[originalIdx];
-    const isWhitespace = /\s/.test(char);
+  // Try without markdown formatting
+  const cleanCitedText = citedText
+    .replace(/\*\*/g, '')      // Remove bold
+    .replace(/\*/g, '')        // Remove italic
+    .replace(/#{1,6}\s/g, '')  // Remove headings
+    .replace(/`/g, '')         // Remove code
+    .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')  // Remove links
+    .trim();
 
-    if (isWhitespace) {
-      if (!inWhitespace) {
-        normalizedIdx++;
-        inWhitespace = true;
-      }
-    } else {
-      normalizedIdx++;
-      inWhitespace = false;
-    }
-    originalIdx++;
+  // Search for the clean version in the text
+  pos = text.indexOf(cleanCitedText);
+  if (pos !== -1) return { position: pos, length: cleanCitedText.length };
+
+  // Try case-insensitive
+  const lowerText = text.toLowerCase();
+  const lowerCited = cleanCitedText.toLowerCase();
+  pos = lowerText.indexOf(lowerCited);
+
+  if (pos !== -1) {
+    // Return the actual length in the source text (may differ from cited text due to case)
+    return { position: pos, length: cleanCitedText.length };
   }
 
-  return originalIdx;
+  return { position: -1, length: 0 };
+}
+
+// Find the next word boundary after a position (space, punctuation, or end of text)
+// This ensures citation markers appear AFTER complete words, not in the middle
+function findWordBoundaryAfter(text, startPos) {
+  // If we're already at a word boundary (whitespace, punctuation, or end), use this position
+  if (startPos >= text.length || /[\s.,;:!?)\]]/.test(text[startPos])) {
+    return startPos;
+  }
+
+  // We're in the middle of a word - find the end of THIS word only
+  while (startPos < text.length && /\w/.test(text[startPos])) {
+    startPos++;
+  }
+
+  return startPos;
 }
 
 function toggleDocumentDetails(element) {
@@ -600,27 +552,6 @@ function switchTab(tabName) {
       content.classList.remove('active');
     }
   });
-}
-
-// Wrap cited text with a span for highlighting
-function wrapCitedText(startNode, startOffset, endNode, endOffset, citationIdx) {
-  try {
-    const range = document.createRange();
-    range.setStart(startNode, startOffset);
-    range.setEnd(endNode, endOffset);
-
-    // Create wrapper span
-    const wrapper = document.createElement('span');
-    wrapper.className = 'cited-text';
-    wrapper.setAttribute('data-citation', citationIdx);
-
-    // Wrap the range contents
-    range.surroundContents(wrapper);
-  } catch (e) {
-    // If range spans multiple elements, it will fail
-    // In that case, we'll skip wrapping (citation marker will still work)
-    console.log(`Citation ${citationIdx}: Could not wrap text (spans multiple elements)`);
-  }
 }
 
 function highlightCitation(citationIdx) {
