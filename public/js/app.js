@@ -273,6 +273,13 @@ function displaySearchResults(result) {
   // Store for citation highlighting
   window.searchResult = result;
 
+  // State management for sticky highlights (click vs hover)
+  window.citationState = {
+    stickyMode: null, // 'marker' or 'source'
+    stickyCitationIdx: null,
+    stickySourceIdx: null
+  };
+
   // NEW APPROACH: Insert citation markers in the TEXT before rendering markdown
   let answerText = result.text;
 
@@ -329,15 +336,32 @@ function displaySearchResults(result) {
       }
     });
 
-    // Build mapping from chunk index to citation indices (for highlighting)
-    window.chunkToCitations = new Map();
+    // Build bidirectional mappings for highlighting
+    window.chunkToCitations = new Map(); // originalChunkIdx → [citationIdx, ...]
+    window.citationToChunks = new Map(); // citationIdx → [originalChunkIdx, ...]
+    window.citationToDisplayIndices = new Map(); // citationIdx → [displayIdx, ...]
+    window.originalToDisplayIndex = new Map(); // originalChunkIdx → displayIdx
+
     result.groundingMetadata.groundingSupports.forEach((support, citationIdx) => {
-      support.groundingChunkIndices?.forEach(chunkIdx => {
+      const chunkIndices = support.groundingChunkIndices || [];
+      window.citationToChunks.set(citationIdx, chunkIndices);
+
+      const displayIndices = chunkIndices
+        .map(idx => chunkIndexToDisplayIndex.get(idx))
+        .filter(idx => idx !== undefined);
+      window.citationToDisplayIndices.set(citationIdx, displayIndices);
+
+      chunkIndices.forEach(chunkIdx => {
         if (!window.chunkToCitations.has(chunkIdx)) {
           window.chunkToCitations.set(chunkIdx, []);
         }
         window.chunkToCitations.get(chunkIdx).push(citationIdx);
       });
+    });
+
+    // Store original to display index mapping
+    chunkIndexToDisplayIndex.forEach((displayIdx, originalIdx) => {
+      window.originalToDisplayIndex.set(originalIdx, displayIdx);
     });
 
     // Build citations list - one entry per unique source chunk with expandable full text
@@ -354,14 +378,15 @@ function displaySearchResults(result) {
         const title = chunk.retrievedContext.title || 'Unknown';
 
         citationsHtml += `
-          <div class="citation-item" id="display-source-${sourceDisplayIdx}"
-               onmouseenter="highlightCitationBySource(${originalIdx})"
-               onmouseleave="clearHighlight()">
+          <div class="citation-item" id="display-source-${sourceDisplayIdx}" data-original-idx="${originalIdx}"
+               onmouseenter="handleSourceHover(${originalIdx})"
+               onmouseleave="handleSourceLeave(${originalIdx})"
+               onclick="handleSourceClick(event, ${originalIdx})">
             <div class="citation-header">
               <span class="citation-ref">[${sourceDisplayIdx + 1}]</span>
               <span class="citation-doc">${escapeHtml(title)}</span>
             </div>
-            <details class="citation-details">
+            <details class="citation-details" id="details-source-${sourceDisplayIdx}">
               <summary class="citation-preview">${escapeHtml(preview)}</summary>
               <div class="citation-full-text">${escapeHtml(excerpt).replace(/\n/g, '<br>')}</div>
             </details>
@@ -370,7 +395,10 @@ function displaySearchResults(result) {
         sourceDisplayIdx++;
       } else if (chunk.web) {
         citationsHtml += `
-          <div class="citation-item" id="display-source-${sourceDisplayIdx}">
+          <div class="citation-item" id="display-source-${sourceDisplayIdx}" data-original-idx="${originalIdx}"
+               onmouseenter="handleSourceHover(${originalIdx})"
+               onmouseleave="handleSourceLeave(${originalIdx})"
+               onclick="handleSourceClick(event, ${originalIdx})">
             <div class="citation-header">
               <span class="citation-ref">[${sourceDisplayIdx + 1}]</span>
               <a href="${escapeHtml(chunk.web.uri)}" target="_blank" class="citation-doc">${escapeHtml(chunk.web.title || chunk.web.uri)}</a>
@@ -433,9 +461,9 @@ function insertCitationMarkersInText(text, groundingSupports, chunkIndexToDispla
   // Apply modifications from end to start (to preserve positions)
   let modifiedText = text;
   modifications.forEach(mod => {
-    // Create marker HTML
+    // Create marker HTML with hover and click handlers
     const badges = mod.displayIndices
-      .map(idx => `<span class="citation-marker" onclick="event.stopPropagation(); highlightCitation(${mod.citationIdx}); scrollToDisplaySource(${idx});">${idx + 1}</span>`)
+      .map(idx => `<span class="citation-marker" onmouseenter="handleMarkerHover(${mod.citationIdx})" onmouseleave="handleMarkerLeave(${mod.citationIdx})" onclick="handleMarkerClick(event, ${mod.citationIdx})">${idx + 1}</span>`)
       .join('');
     const marker = `<span class="citation-markers" data-citation="${mod.citationIdx}">${badges}</span>`;
 
@@ -520,6 +548,12 @@ function toggleSidebar() {
 
   if (sidebar.classList.contains('collapsed')) {
     toggleIcon.textContent = '▶';
+    // Clear sticky state when collapsing sidebar
+    if (window.citationState) {
+      window.citationState.stickyMode = null;
+      window.citationState.stickyCitationIdx = null;
+      window.citationState.stickySourceIdx = null;
+    }
     clearAllHighlights();
   } else {
     toggleIcon.textContent = '◀';
@@ -554,27 +588,171 @@ function switchTab(tabName) {
   });
 }
 
+// === LEGACY FUNCTIONS (for backward compatibility) ===
+
 function highlightCitation(citationIdx) {
-  // Clear previous highlights
-  clearHighlight();
-
-  // Highlight the citation markers
-  const markers = document.querySelectorAll(`.citation-markers[data-citation="${citationIdx}"]`);
-  markers.forEach(marker => marker.classList.add('highlighted'));
-
-  // Highlight the cited text
-  const citedTexts = document.querySelectorAll(`.cited-text[data-citation="${citationIdx}"]`);
-  citedTexts.forEach(text => text.classList.add('highlighted'));
+  // Redirect to new system
+  highlightCitationAndSource(citationIdx, false);
 }
 
 function highlightCitationBySource(chunkIdx) {
-  // Clear previous highlights
-  clearHighlight();
+  // Redirect to new system
+  highlightSourceAndCitations(chunkIdx, false);
+}
 
-  // Find all citations that reference this source chunk
-  const citationIndices = window.chunkToCitations?.get(chunkIdx) || [];
+function clearHighlight() {
+  // Redirect to new system
+  clearAllCitationHighlights();
+}
 
-  // Highlight all of them
+// === MARKER-DRIVEN INTERACTION HANDLERS ===
+
+function handleMarkerHover(citationIdx) {
+  // Only respond to hover if not in sticky mode
+  if (window.citationState?.stickyMode) return;
+
+  highlightCitationAndSource(citationIdx, false);
+}
+
+function handleMarkerLeave(citationIdx) {
+  // Only clear on leave if not in sticky mode
+  if (window.citationState?.stickyMode) return;
+
+  clearAllCitationHighlights();
+}
+
+function handleMarkerClick(event, citationIdx) {
+  event.stopPropagation();
+
+  // If clicking the same marker, toggle off sticky mode
+  if (window.citationState?.stickyMode === 'marker' &&
+      window.citationState?.stickyCitationIdx === citationIdx) {
+    window.citationState.stickyMode = null;
+    window.citationState.stickyCitationIdx = null;
+    clearAllCitationHighlights();
+    return;
+  }
+
+  // Set sticky mode
+  window.citationState.stickyMode = 'marker';
+  window.citationState.stickyCitationIdx = citationIdx;
+  window.citationState.stickySourceIdx = null;
+
+  highlightCitationAndSource(citationIdx, true);
+}
+
+// === SOURCE-DRIVEN INTERACTION HANDLERS ===
+
+function handleSourceHover(originalIdx) {
+  // Only respond to hover if not in sticky mode
+  if (window.citationState?.stickyMode) return;
+
+  highlightSourceAndCitations(originalIdx, false);
+}
+
+function handleSourceLeave(originalIdx) {
+  // Only clear on leave if not in sticky mode
+  if (window.citationState?.stickyMode) return;
+
+  clearAllCitationHighlights();
+}
+
+function handleSourceClick(event, originalIdx) {
+  // Don't interfere with link clicks or detail toggles
+  if (event.target.tagName === 'A' || event.target.tagName === 'SUMMARY') {
+    return;
+  }
+
+  event.stopPropagation();
+
+  // If clicking the same source, toggle off sticky mode
+  if (window.citationState?.stickyMode === 'source' &&
+      window.citationState?.stickySourceIdx === originalIdx) {
+    window.citationState.stickyMode = null;
+    window.citationState.stickySourceIdx = null;
+    clearAllCitationHighlights();
+    return;
+  }
+
+  // Set sticky mode
+  window.citationState.stickyMode = 'source';
+  window.citationState.stickySourceIdx = originalIdx;
+  window.citationState.stickyCitationIdx = null;
+
+  highlightSourceAndCitations(originalIdx, true);
+}
+
+// === HIGHLIGHT FUNCTIONS ===
+
+function highlightCitationAndSource(citationIdx, expand) {
+  clearAllCitationHighlights();
+
+  // Highlight the citation markers and cited text
+  const markers = document.querySelectorAll(`.citation-markers[data-citation="${citationIdx}"]`);
+  markers.forEach(marker => marker.classList.add('highlighted'));
+
+  const citedTexts = document.querySelectorAll(`.cited-text[data-citation="${citationIdx}"]`);
+  citedTexts.forEach(text => text.classList.add('highlighted'));
+
+  // Get the source chunks for this citation
+  const displayIndices = window.citationToDisplayIndices?.get(citationIdx) || [];
+
+  if (displayIndices.length > 0) {
+    // Open sidebar and switch to citations
+    openSidebar();
+    switchTab('citations');
+
+    // Highlight and scroll to sources
+    displayIndices.forEach((displayIdx, index) => {
+      const sourceElement = document.getElementById(`display-source-${displayIdx}`);
+      if (sourceElement) {
+        sourceElement.classList.add('highlighted');
+
+        // Expand details if requested
+        if (expand) {
+          const details = document.getElementById(`details-source-${displayIdx}`);
+          if (details) {
+            details.open = true;
+          }
+        }
+
+        // Scroll to the first one
+        if (index === 0) {
+          sourceElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    });
+  }
+}
+
+function highlightSourceAndCitations(originalIdx, expand) {
+  clearAllCitationHighlights();
+
+  const displayIdx = window.originalToDisplayIndex?.get(originalIdx);
+
+  // Highlight the source
+  const sourceElement = document.getElementById(`display-source-${displayIdx}`);
+  if (sourceElement) {
+    sourceElement.classList.add('highlighted');
+
+    // Expand details if requested
+    if (expand) {
+      const details = document.getElementById(`details-source-${displayIdx}`);
+      if (details) {
+        details.open = true;
+      }
+    }
+
+    // Scroll to source
+    openSidebar();
+    switchTab('citations');
+    sourceElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  // Find all citations that reference this source
+  const citationIndices = window.chunkToCitations?.get(originalIdx) || [];
+
+  // Highlight all related markers and cited texts
   citationIndices.forEach(citationIdx => {
     const markers = document.querySelectorAll(`.citation-markers[data-citation="${citationIdx}"]`);
     markers.forEach(marker => marker.classList.add('highlighted'));
@@ -584,7 +762,7 @@ function highlightCitationBySource(chunkIdx) {
   });
 }
 
-function clearHighlight() {
+function clearAllCitationHighlights() {
   // Remove all highlight classes from markers
   document.querySelectorAll('.citation-markers.highlighted').forEach(el => {
     el.classList.remove('highlighted');
@@ -592,6 +770,11 @@ function clearHighlight() {
 
   // Remove all highlight classes from cited text
   document.querySelectorAll('.cited-text.highlighted').forEach(el => {
+    el.classList.remove('highlighted');
+  });
+
+  // Remove all highlight classes from sources
+  document.querySelectorAll('.citation-item.highlighted').forEach(el => {
     el.classList.remove('highlighted');
   });
 }
@@ -645,5 +828,21 @@ function escapeHtml(text) {
 document.addEventListener('click', (e) => {
   if (e.target.classList.contains('modal')) {
     e.target.classList.remove('show');
+  }
+
+  // Clear sticky citation highlighting when clicking outside
+  if (window.citationState?.stickyMode) {
+    // Check if click is on a citation-related element
+    const isClickOnCitation = e.target.closest('.citation-marker') ||
+                              e.target.closest('.citation-markers') ||
+                              e.target.closest('.citation-item') ||
+                              e.target.closest('.cited-text');
+
+    if (!isClickOnCitation) {
+      window.citationState.stickyMode = null;
+      window.citationState.stickyCitationIdx = null;
+      window.citationState.stickySourceIdx = null;
+      clearAllCitationHighlights();
+    }
   }
 });
