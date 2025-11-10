@@ -1,5 +1,30 @@
-const API_BASE = '/api';
+/**
+ * Client-side application logic
+ * Handles API communication, store/document/search management, and citation display
+ */
 
+// Constants
+const API_BASE = '/api';
+const CITATION_PREVIEW_LENGTH = 150;
+const SUCCESS_MESSAGE_DURATION = 3000;
+
+// Client-side error boundaries
+window.addEventListener('error', (event) => {
+  console.error('Uncaught error:', event.error);
+  showError('An unexpected error occurred. Please refresh the page.');
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('Unhandled promise rejection:', event.reason);
+  showError('An unexpected error occurred. Please try again.');
+});
+
+/**
+ * Makes an API call with error handling
+ * @param {string} endpoint - API endpoint path
+ * @param {Object} options - Fetch options
+ * @returns {Promise<Object>} API response data
+ */
 async function apiCall(endpoint, options = {}) {
   try {
     const response = await fetch(`${API_BASE}${endpoint}`, {
@@ -24,6 +49,10 @@ function showError(message) {
   alert(`Error: ${message}`);
 }
 
+/**
+ * Shows a success message notification
+ * @param {string} message - Success message to display
+ */
 function showSuccess(message) {
   const existing = document.querySelector('.success-message');
   if (existing) existing.remove();
@@ -32,7 +61,7 @@ function showSuccess(message) {
   div.className = 'success-message';
   div.textContent = message;
   document.body.appendChild(div);
-  setTimeout(() => div.remove(), 3000);
+  setTimeout(() => div.remove(), SUCCESS_MESSAGE_DURATION);
 }
 
 if (window.location.pathname === '/stores') {
@@ -64,23 +93,39 @@ async function loadStores() {
     const stores = data.stores;
 
     if (stores.length === 0) {
-      container.innerHTML = '<p class="empty-state">No stores found. Create one to get started.</p>';
+      showEmptyState(container, 'No stores found. Create one to get started.');
       return;
     }
 
-    container.innerHTML = stores.map(store => `
-      <div class="store-card">
-        <h3>${escapeHtml(store.displayName || 'Unnamed Store')}</h3>
-        <p class="store-name">${escapeHtml(store.name)}</p>
-        <div class="store-actions">
-          <a href="/stores/${encodeURIComponent(store.name)}" class="btn btn-primary">Open</a>
-          <button class="btn btn-danger" onclick="deleteStore('${escapeHtml(store.name)}')">Delete</button>
-        </div>
-      </div>
-    `).join('');
+    const storeElements = stores.map(store => createStoreCard(store));
+    replaceChildren(container, ...storeElements);
   } catch (error) {
-    container.innerHTML = '<p class="error-state">Failed to load stores</p>';
+    showErrorState(container, 'Failed to load stores');
   }
+}
+
+/**
+ * Creates a store card element using template
+ * @param {Object} store - Store data
+ * @returns {DocumentFragment} Store card element
+ */
+function createStoreCard(store) {
+  const template = new TemplateEngine('store-card-template');
+
+  return template.create(store, {
+    '.store-title': (el) => {
+      el.textContent = store.displayName || 'Unnamed Store';
+    },
+    '.store-name': (el) => {
+      el.textContent = store.name;
+    },
+    '.open-btn': (el) => {
+      el.href = `/stores/${encodeURIComponent(store.name)}`;
+    },
+    '.delete-btn': (el) => {
+      el.addEventListener('click', () => deleteStore(store.name));
+    }
+  });
 }
 
 async function deleteStore(name) {
@@ -208,43 +253,88 @@ async function loadDocuments() {
     const documents = data.store?.documents || data.documents;
 
     if (!documents || documents.length === 0) {
-      container.innerHTML = '<p class="empty-state">No documents yet. Upload one to get started.</p>';
+      showEmptyState(container, 'No documents yet. Upload one to get started.');
       return;
     }
 
-    container.innerHTML = documents.map(doc => {
-      const metadata = doc.customMetadata ? doc.customMetadata.map(m =>
-        `<span class="metadata-tag">${escapeHtml(m.key)}: ${escapeHtml(m.stringValue || m.numericValue)}</span>`
-      ).join('') : '';
-
-      const fileSize = doc.sizeBytes ? (parseInt(doc.sizeBytes) / 1024).toFixed(1) + ' KB' : 'Unknown';
-      const createDate = doc.createTime ? new Date(doc.createTime).toLocaleString() : 'Unknown';
-
-      return `
-        <div class="document-item" onclick="toggleDocumentDetails(this)">
-          <div class="document-summary">
-            <div class="document-main-info">
-              <h4>${escapeHtml(doc.displayName || doc.name)}</h4>
-              <span class="document-meta">${fileSize} • ${doc.mimeType || 'Unknown type'}</span>
-            </div>
-            <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteDocument('${escapeHtml(doc.name)}')">Delete</button>
-          </div>
-          <div class="document-details" style="display: none;">
-            <div class="detail-row"><strong>Document ID:</strong> ${escapeHtml(doc.name)}</div>
-            <div class="detail-row"><strong>Display Name:</strong> ${escapeHtml(doc.displayName || 'N/A')}</div>
-            <div class="detail-row"><strong>Created:</strong> ${createDate}</div>
-            <div class="detail-row"><strong>Size:</strong> ${fileSize}</div>
-            <div class="detail-row"><strong>MIME Type:</strong> ${escapeHtml(doc.mimeType || 'Unknown')}</div>
-            <div class="detail-row"><strong>State:</strong> ${escapeHtml(doc.state || 'Unknown')}</div>
-            ${metadata ? `<div class="detail-row"><strong>Metadata:</strong><br>${metadata}</div>` : ''}
-          </div>
-        </div>
-      `;
-    }).join('');
+    const documentElements = documents.map(doc => createDocumentItem(doc));
+    replaceChildren(container, ...documentElements);
   } catch (error) {
     console.error('Frontend error loading documents:', error);
-    container.innerHTML = '<p class="error-state">Failed to load documents</p>';
+    showErrorState(container, 'Failed to load documents');
   }
+}
+
+/**
+ * Creates a document item element using template
+ * @param {Object} doc - Document data
+ * @returns {DocumentFragment} Document item element
+ */
+function createDocumentItem(doc) {
+  const template = new TemplateEngine('document-item-template');
+  const fileSize = doc.sizeBytes ? (parseInt(doc.sizeBytes) / 1024).toFixed(1) + ' KB' : 'Unknown';
+  const createDate = doc.createTime ? new Date(doc.createTime).toLocaleString() : 'Unknown';
+
+  return template.create(doc, {
+    '.document-item': (el) => {
+      el.addEventListener('click', function() {
+        toggleDocumentDetails(this);
+      });
+    },
+    '.doc-title': (el) => {
+      el.textContent = doc.displayName || doc.name;
+    },
+    '.document-meta': (el) => {
+      el.textContent = `${fileSize} • ${doc.mimeType || 'Unknown type'}`;
+    },
+    '.delete-btn': (el) => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteDocument(doc.name);
+      });
+    },
+    '.doc-id': (el) => {
+      el.textContent = doc.name;
+    },
+    '.doc-display-name': (el) => {
+      el.textContent = doc.displayName || 'N/A';
+    },
+    '.doc-created': (el) => {
+      el.textContent = createDate;
+    },
+    '.doc-size': (el) => {
+      el.textContent = fileSize;
+    },
+    '.doc-mime': (el) => {
+      el.textContent = doc.mimeType || 'Unknown';
+    },
+    '.doc-state': (el) => {
+      el.textContent = doc.state || 'Unknown';
+    },
+    '.metadata-row': (el) => {
+      if (doc.customMetadata && doc.customMetadata.length > 0) {
+        el.style.display = 'block';
+        const tagsContainer = el.querySelector('.metadata-tags');
+        const tags = doc.customMetadata.map(m => createMetadataTag(m));
+        replaceChildren(tagsContainer, ...tags);
+      }
+    }
+  });
+}
+
+/**
+ * Creates a metadata tag element
+ * @param {Object} metadata - Metadata object with key and value
+ * @returns {DocumentFragment} Metadata tag element
+ */
+function createMetadataTag(metadata) {
+  const template = new TemplateEngine('metadata-tag-template');
+
+  return template.create(metadata, {
+    '.metadata-tag': (el) => {
+      el.textContent = `${metadata.key}: ${metadata.stringValue || metadata.numericValue}`;
+    }
+  });
 }
 
 async function deleteDocument(name) {
@@ -260,13 +350,77 @@ async function deleteDocument(name) {
   }
 }
 
+/**
+ * Creates a citation item element
+ * @param {Object} data - Citation data
+ * @returns {Node} Citation item element
+ */
+function createCitationItem(data) {
+  if (data.type === 'web') {
+    const template = new TemplateEngine('citation-web-item-template');
+
+    const fragment = template.create(data, {
+      '.citation-item': (el) => {
+        el.id = `display-source-${data.displayIdx}`;
+        el.dataset.originalIdx = data.originalIdx;
+        el.addEventListener('mouseenter', () => handleSourceHover(data.originalIdx));
+        el.addEventListener('mouseleave', () => handleSourceLeave(data.originalIdx));
+        el.addEventListener('click', (e) => handleSourceClick(e, data.originalIdx));
+      },
+      '.citation-ref': (el) => {
+        el.textContent = `[${data.displayIdx + 1}]`;
+      },
+      '.citation-doc': (el) => {
+        el.textContent = data.title;
+        el.href = data.uri;
+      }
+    });
+
+    return fragment.firstElementChild || fragment;
+  } else {
+    // Document citation
+    const template = new TemplateEngine('citation-item-template');
+    const preview = data.excerpt.length > CITATION_PREVIEW_LENGTH
+      ? data.excerpt.substring(0, CITATION_PREVIEW_LENGTH) + '...'
+      : data.excerpt;
+
+    const fragment = template.create(data, {
+      '.citation-item': (el) => {
+        el.id = `display-source-${data.displayIdx}`;
+        el.dataset.originalIdx = data.originalIdx;
+        el.addEventListener('mouseenter', () => handleSourceHover(data.originalIdx));
+        el.addEventListener('mouseleave', () => handleSourceLeave(data.originalIdx));
+        el.addEventListener('click', (e) => handleSourceClick(e, data.originalIdx));
+      },
+      '.citation-ref': (el) => {
+        el.textContent = `[${data.displayIdx + 1}]`;
+      },
+      '.citation-doc': (el) => {
+        el.textContent = data.title;
+      },
+      '.citation-details': (el) => {
+        el.id = `details-source-${data.displayIdx}`;
+      },
+      '.citation-preview': (el) => {
+        el.textContent = preview;
+      },
+      '.citation-full-text': (el) => {
+        el.textContent = data.excerpt;
+        el.style.whiteSpace = 'pre-wrap';
+      }
+    });
+
+    return fragment.firstElementChild || fragment;
+  }
+}
+
 function displaySearchResults(result) {
   const resultsDiv = document.getElementById('search-results');
   const citationsContainer = document.getElementById('citations-container');
 
   if (!result || !result.text) {
-    resultsDiv.innerHTML = '<p class="empty-state">No results found</p>';
-    citationsContainer.innerHTML = '<p class="empty-state">No citations available</p>';
+    showEmptyState(resultsDiv, 'No results found');
+    showEmptyState(citationsContainer, 'No citations available');
     return;
   }
 
@@ -308,15 +462,27 @@ function displaySearchResults(result) {
   }
 
   // Now render the markdown with markers already inserted
-  const answerHtml = marked.parse(answerText);
+  const rawAnswerHtml = marked.parse(answerText);
 
-  // Display answer in main section
-  resultsDiv.innerHTML = `
-    <div class="search-result-content">
-      <h3>Answer</h3>
-      <div class="answer-text" id="answer-text">${answerHtml}</div>
-    </div>
-  `;
+  // Sanitize the markdown output with DOMPurify
+  const sanitizedAnswerHtml = DOMPurify.sanitize(rawAnswerHtml, {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'code', 'pre', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'span'],
+    ALLOWED_ATTR: ['href', 'class', 'data-citation', 'data-citation-idx'],
+    KEEP_CONTENT: true
+  });
+
+  // Display answer in main section using safe DOM manipulation
+  const resultContent = createElement('div', { className: 'search-result-content' });
+  const heading = createElement('h3', {}, 'Answer');
+  const answerDiv = createElement('div', { className: 'answer-text', id: 'answer-text' });
+  answerDiv.innerHTML = sanitizedAnswerHtml;
+
+  resultContent.appendChild(heading);
+  resultContent.appendChild(answerDiv);
+  replaceChildren(resultsDiv, resultContent);
+
+  // Attach event listeners to citation markers
+  attachCitationMarkerListeners();
 
   // Display citations in sidebar - Wikipedia style (one entry per unique source)
   if (result.groundingMetadata?.groundingChunks && result.groundingMetadata?.groundingSupports) {
@@ -365,7 +531,7 @@ function displaySearchResults(result) {
     });
 
     // Build citations list - one entry per unique source chunk with expandable full text
-    let citationsHtml = '<div class="citations-list">';
+    const citationsList = createElement('div', { className: 'citations-list' });
 
     let sourceDisplayIdx = 0;
     result.groundingMetadata.groundingChunks.forEach((chunk, originalIdx) => {
@@ -373,44 +539,29 @@ function displaySearchResults(result) {
       if (!citedChunkIndices.has(originalIdx)) return;
 
       if (chunk.retrievedContext) {
-        const excerpt = chunk.retrievedContext.text || '';
-        const preview = excerpt.length > 150 ? excerpt.substring(0, 150) + '...' : excerpt;
-        const title = chunk.retrievedContext.title || 'Unknown';
-
-        citationsHtml += `
-          <div class="citation-item" id="display-source-${sourceDisplayIdx}" data-original-idx="${originalIdx}"
-               onmouseenter="handleSourceHover(${originalIdx})"
-               onmouseleave="handleSourceLeave(${originalIdx})"
-               onclick="handleSourceClick(event, ${originalIdx})">
-            <div class="citation-header">
-              <span class="citation-ref">[${sourceDisplayIdx + 1}]</span>
-              <span class="citation-doc">${escapeHtml(title)}</span>
-            </div>
-            <details class="citation-details" id="details-source-${sourceDisplayIdx}">
-              <summary class="citation-preview">${escapeHtml(preview)}</summary>
-              <div class="citation-full-text">${escapeHtml(excerpt).replace(/\n/g, '<br>')}</div>
-            </details>
-          </div>
-        `;
+        const citationElement = createCitationItem({
+          displayIdx: sourceDisplayIdx,
+          originalIdx,
+          title: chunk.retrievedContext.title || 'Unknown',
+          excerpt: chunk.retrievedContext.text || '',
+          type: 'document'
+        });
+        citationsList.appendChild(citationElement);
         sourceDisplayIdx++;
       } else if (chunk.web) {
-        citationsHtml += `
-          <div class="citation-item" id="display-source-${sourceDisplayIdx}" data-original-idx="${originalIdx}"
-               onmouseenter="handleSourceHover(${originalIdx})"
-               onmouseleave="handleSourceLeave(${originalIdx})"
-               onclick="handleSourceClick(event, ${originalIdx})">
-            <div class="citation-header">
-              <span class="citation-ref">[${sourceDisplayIdx + 1}]</span>
-              <a href="${escapeHtml(chunk.web.uri)}" target="_blank" class="citation-doc">${escapeHtml(chunk.web.title || chunk.web.uri)}</a>
-            </div>
-          </div>
-        `;
+        const citationElement = createCitationItem({
+          displayIdx: sourceDisplayIdx,
+          originalIdx,
+          title: chunk.web.title || chunk.web.uri,
+          uri: chunk.web.uri,
+          type: 'web'
+        });
+        citationsList.appendChild(citationElement);
         sourceDisplayIdx++;
       }
     });
-    citationsHtml += '</div>';
 
-    citationsContainer.innerHTML = citationsHtml;
+    replaceChildren(citationsContainer, citationsList);
 
     // Open sidebar and switch to citations tab
     openSidebar();
@@ -420,7 +571,28 @@ function displaySearchResults(result) {
   }
 }
 
-// Insert citation markers into the TEXT before rendering (new simple approach)
+/**
+ * Attaches event listeners to citation markers after rendering
+ */
+function attachCitationMarkerListeners() {
+  const markers = document.querySelectorAll('.citation-marker');
+
+  markers.forEach(marker => {
+    const citationIdx = parseInt(marker.dataset.citationIdx);
+
+    marker.addEventListener('mouseenter', () => handleMarkerHover(citationIdx));
+    marker.addEventListener('mouseleave', () => handleMarkerLeave(citationIdx));
+    marker.addEventListener('click', (e) => handleMarkerClick(e, citationIdx));
+  });
+}
+
+/**
+ * Insert citation markers into the TEXT before rendering (new simple approach)
+ * @param {string} text - The answer text before markdown rendering
+ * @param {Array} groundingSupports - Citation segments from API
+ * @param {Map} chunkIndexToDisplayIndex - Maps chunk indices to display numbers
+ * @returns {string} Text with citation markers inserted
+ */
 function insertCitationMarkersInText(text, groundingSupports, chunkIndexToDisplayIndex) {
   // Collect all citation modifications (wrapping + markers) with their positions
   const modifications = [];
@@ -461,9 +633,9 @@ function insertCitationMarkersInText(text, groundingSupports, chunkIndexToDispla
   // Apply modifications from end to start (to preserve positions)
   let modifiedText = text;
   modifications.forEach(mod => {
-    // Create marker HTML with hover and click handlers
+    // Create marker HTML with data attributes (no inline handlers)
     const badges = mod.displayIndices
-      .map(idx => `<span class="citation-marker" onmouseenter="handleMarkerHover(${mod.citationIdx})" onmouseleave="handleMarkerLeave(${mod.citationIdx})" onclick="handleMarkerClick(event, ${mod.citationIdx})">${idx + 1}</span>`)
+      .map(idx => `<span class="citation-marker" data-citation-idx="${mod.citationIdx}">${escapeHtml(String(idx + 1))}</span>`)
       .join('');
     const marker = `<span class="citation-markers" data-citation="${mod.citationIdx}">${badges}</span>`;
 

@@ -137,8 +137,61 @@
     </div>
   </footer>
 
+  <!-- Templates -->
+  <template id="document-item-template">
+    <div class="document-item">
+      <div class="document-summary">
+        <div class="document-main-info">
+          <h4 class="doc-title"></h4>
+          <span class="document-meta"></span>
+        </div>
+        <button class="btn btn-danger btn-sm delete-btn">Delete</button>
+      </div>
+      <div class="document-details" style="display: none;">
+        <div class="detail-row"><strong>Document ID:</strong> <span class="doc-id"></span></div>
+        <div class="detail-row"><strong>Display Name:</strong> <span class="doc-display-name"></span></div>
+        <div class="detail-row"><strong>Created:</strong> <span class="doc-created"></span></div>
+        <div class="detail-row"><strong>Size:</strong> <span class="doc-size"></span></div>
+        <div class="detail-row"><strong>MIME Type:</strong> <span class="doc-mime"></span></div>
+        <div class="detail-row"><strong>State:</strong> <span class="doc-state"></span></div>
+        <div class="detail-row metadata-row" style="display: none;">
+          <strong>Metadata:</strong><br>
+          <div class="metadata-tags"></div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <template id="metadata-tag-template">
+    <span class="metadata-tag"></span>
+  </template>
+
+  <template id="citation-item-template">
+    <div class="citation-item">
+      <div class="citation-header">
+        <span class="citation-ref"></span>
+        <span class="citation-doc"></span>
+      </div>
+      <details class="citation-details">
+        <summary class="citation-preview"></summary>
+        <div class="citation-full-text"></div>
+      </details>
+    </div>
+  </template>
+
+  <template id="citation-web-item-template">
+    <div class="citation-item">
+      <div class="citation-header">
+        <span class="citation-ref"></span>
+        <a class="citation-doc" target="_blank"></a>
+      </div>
+    </div>
+  </template>
+
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+  <script src="/js/dom-helpers.js"></script>
   <script>
-    const STORE_NAME = '<%= storeName %>';
+    const STORE_NAME = <%- JSON.stringify(storeName) %>;
   </script>
   <script src="/js/app.js"></script>
 </body>
