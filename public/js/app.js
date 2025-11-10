@@ -338,6 +338,17 @@ function displaySearchResults(result) {
       }
     });
 
+    // Build mapping from chunk index to citation indices (for highlighting)
+    window.chunkToCitations = new Map();
+    result.groundingMetadata.groundingSupports.forEach((support, citationIdx) => {
+      support.groundingChunkIndices?.forEach(chunkIdx => {
+        if (!window.chunkToCitations.has(chunkIdx)) {
+          window.chunkToCitations.set(chunkIdx, []);
+        }
+        window.chunkToCitations.get(chunkIdx).push(citationIdx);
+      });
+    });
+
     // Build citations list - one entry per unique source chunk with expandable full text
     let citationsHtml = '<div class="citations-list">';
 
@@ -352,7 +363,9 @@ function displaySearchResults(result) {
         const title = chunk.retrievedContext.title || 'Unknown';
 
         citationsHtml += `
-          <div class="citation-item" id="display-source-${sourceDisplayIdx}">
+          <div class="citation-item" id="display-source-${sourceDisplayIdx}"
+               onmouseenter="highlightCitationBySource(${originalIdx})"
+               onmouseleave="clearHighlight()">
             <div class="citation-header">
               <span class="citation-ref">[${sourceDisplayIdx + 1}]</span>
               <span class="citation-doc">${escapeHtml(title)}</span>
@@ -450,15 +463,38 @@ function insertCitationMarker(container, citedText, chunkIndices, citationIdx) {
   let currentPos = 0;
   let endPos = startPos + normalizedSearch.length;
 
+  // Find start and end nodes/offsets for wrapping
+  let startNode = null, startOffset = 0;
+  let endNode = null, endOffset = 0;
+  let foundStart = false;
+
   for (let i = 0; i < textNodes.length; i++) {
     const nodeText = textNodes[i].textContent;
     const normalizedNodeText = nodeText.replace(/\s+/g, ' ');
     const nodeLength = normalizedNodeText.length;
     const nodeEnd = currentPos + nodeLength;
 
+    // Find start position
+    if (!foundStart && currentPos <= startPos && startPos < nodeEnd) {
+      startNode = textNodes[i];
+      // Map normalized position back to original text
+      const normalizedOffset = startPos - currentPos;
+      startOffset = mapNormalizedToOriginal(nodeText, normalizedOffset);
+      foundStart = true;
+    }
+
+    // Find end position
     if (currentPos <= endPos && endPos <= nodeEnd) {
-      // Found the node containing the end of citation
-      // Insert marker after this text node
+      endNode = textNodes[i];
+      const normalizedOffset = endPos - currentPos;
+      endOffset = mapNormalizedToOriginal(nodeText, normalizedOffset);
+
+      // Wrap the cited text
+      if (startNode && endNode) {
+        wrapCitedText(startNode, startOffset, endNode, endOffset, citationIdx);
+      }
+
+      // Insert marker after the end node
       const marker = document.createElement('span');
       marker.className = 'citation-markers';
       marker.setAttribute('data-citation', citationIdx);
@@ -469,28 +505,51 @@ function insertCitationMarker(container, citedText, chunkIndices, citationIdx) {
         badge.textContent = displayIdx + 1;
         badge.onclick = (e) => {
           e.stopPropagation();
+          highlightCitation(citationIdx);
           scrollToDisplaySource(displayIdx);
         };
         marker.appendChild(badge);
       });
 
-      // Insert after the text node
-      const parent = textNodes[i].parentNode;
-      if (parent && textNodes[i].nextSibling) {
-        parent.insertBefore(marker, textNodes[i].nextSibling);
+      // Insert after the end node
+      const parent = endNode.parentNode;
+      if (parent && endNode.nextSibling) {
+        parent.insertBefore(marker, endNode.nextSibling);
       } else if (parent) {
         parent.appendChild(marker);
       }
 
       console.log(`Citation ${citationIdx}: Marker inserted successfully for chunks [${chunkIndices.map(idx => idx + 1).join(', ')}]`);
-
-      // Wrap the cited text for highlighting
-      wrapCitedText(textNodes, startPos, endPos, citationIdx);
       return;
     }
 
     currentPos = nodeEnd;
   }
+}
+
+// Map a position in normalized text back to original text position
+function mapNormalizedToOriginal(originalText, normalizedPos) {
+  let originalIdx = 0;
+  let normalizedIdx = 0;
+  let inWhitespace = false;
+
+  while (originalIdx < originalText.length && normalizedIdx < normalizedPos) {
+    const char = originalText[originalIdx];
+    const isWhitespace = /\s/.test(char);
+
+    if (isWhitespace) {
+      if (!inWhitespace) {
+        normalizedIdx++;
+        inWhitespace = true;
+      }
+    } else {
+      normalizedIdx++;
+      inWhitespace = false;
+    }
+    originalIdx++;
+  }
+
+  return originalIdx;
 }
 
 function toggleDocumentDetails(element) {
@@ -544,10 +603,24 @@ function switchTab(tabName) {
 }
 
 // Wrap cited text with a span for highlighting
-function wrapCitedText(textNodes, startPos, endPos, citationIdx) {
-  // This is complex to do across multiple nodes, so let's use a simpler approach
-  // Just add a data attribute to track the citation for CSS-based highlighting
-  // The cited text wrapper will be added during marker insertion
+function wrapCitedText(startNode, startOffset, endNode, endOffset, citationIdx) {
+  try {
+    const range = document.createRange();
+    range.setStart(startNode, startOffset);
+    range.setEnd(endNode, endOffset);
+
+    // Create wrapper span
+    const wrapper = document.createElement('span');
+    wrapper.className = 'cited-text';
+    wrapper.setAttribute('data-citation', citationIdx);
+
+    // Wrap the range contents
+    range.surroundContents(wrapper);
+  } catch (e) {
+    // If range spans multiple elements, it will fail
+    // In that case, we'll skip wrapping (citation marker will still work)
+    console.log(`Citation ${citationIdx}: Could not wrap text (spans multiple elements)`);
+  }
 }
 
 function highlightCitation(citationIdx) {
@@ -557,11 +630,37 @@ function highlightCitation(citationIdx) {
   // Highlight the citation markers
   const markers = document.querySelectorAll(`.citation-markers[data-citation="${citationIdx}"]`);
   markers.forEach(marker => marker.classList.add('highlighted'));
+
+  // Highlight the cited text
+  const citedTexts = document.querySelectorAll(`.cited-text[data-citation="${citationIdx}"]`);
+  citedTexts.forEach(text => text.classList.add('highlighted'));
+}
+
+function highlightCitationBySource(chunkIdx) {
+  // Clear previous highlights
+  clearHighlight();
+
+  // Find all citations that reference this source chunk
+  const citationIndices = window.chunkToCitations?.get(chunkIdx) || [];
+
+  // Highlight all of them
+  citationIndices.forEach(citationIdx => {
+    const markers = document.querySelectorAll(`.citation-markers[data-citation="${citationIdx}"]`);
+    markers.forEach(marker => marker.classList.add('highlighted'));
+
+    const citedTexts = document.querySelectorAll(`.cited-text[data-citation="${citationIdx}"]`);
+    citedTexts.forEach(text => text.classList.add('highlighted'));
+  });
 }
 
 function clearHighlight() {
   // Remove all highlight classes from markers
   document.querySelectorAll('.citation-markers.highlighted').forEach(el => {
+    el.classList.remove('highlighted');
+  });
+
+  // Remove all highlight classes from cited text
+  document.querySelectorAll('.cited-text.highlighted').forEach(el => {
     el.classList.remove('highlighted');
   });
 }
