@@ -11,6 +11,43 @@ const upload = multer({
   limits: { fileSize: 100 * 1024 * 1024 }
 });
 
+/**
+ * Builds chunking configuration object from request parameters
+ * @param {number} [maxTokensPerChunk] - Max tokens per chunk
+ * @param {number} [maxOverlapTokens] - Overlap tokens between chunks
+ * @returns {Object|null} Chunking config or null if no params provided
+ */
+function buildChunkingConfig(maxTokensPerChunk, maxOverlapTokens) {
+  if (!maxTokensPerChunk) return null;
+
+  return {
+    white_space_config: {
+      max_tokens_per_chunk: parseInt(maxTokensPerChunk),
+      max_overlap_tokens: maxOverlapTokens ? parseInt(maxOverlapTokens) : undefined
+    }
+  };
+}
+
+/**
+ * Parses custom metadata from request body
+ * Accepts JSON string or object, converts to Google API format
+ * @param {string|Object} metadata - Metadata as JSON string or object
+ * @returns {Array|null} Array of {key, stringValue} objects or null
+ */
+function parseCustomMetadata(metadata) {
+  if (!metadata) return null;
+
+  try {
+    const obj = typeof metadata === 'string' ? JSON.parse(metadata) : metadata;
+    return Object.entries(obj).map(([key, value]) => ({
+      key,
+      stringValue: String(value)
+    }));
+  } catch (error) {
+    throw new Error(`Invalid metadata format: ${error.message}`);
+  }
+}
+
 router.get('/stores', async (req, res) => {
   try {
     const stores = await googleAI.listStores();
@@ -80,29 +117,23 @@ router.get('/stores/:name(*)/documents', async (req, res) => {
 });
 
 router.post('/stores/:name(*)/upload', upload.single('file'), async (req, res) => {
+  let tempFile = null;
+
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'No file uploaded' });
     }
 
+    tempFile = req.file.path;
     const storeName = req.params.name;
     const displayName = req.body.displayName || req.file.originalname;
 
-    const chunkingConfig = req.body.maxTokensPerChunk ? {
-      white_space_config: {
-        max_tokens_per_chunk: parseInt(req.body.maxTokensPerChunk),
-        max_overlap_tokens: req.body.maxOverlapTokens ? parseInt(req.body.maxOverlapTokens) : undefined
-      }
-    } : null;
+    const chunkingConfig = buildChunkingConfig(
+      req.body.maxTokensPerChunk,
+      req.body.maxOverlapTokens
+    );
 
-    let customMetadata = null;
-    if (req.body.customMetadata) {
-      const metadataObj = JSON.parse(req.body.customMetadata);
-      customMetadata = Object.entries(metadataObj).map(([key, value]) => ({
-        key,
-        stringValue: String(value)
-      }));
-    }
+    const customMetadata = parseCustomMetadata(req.body.customMetadata);
 
     const result = await googleAI.uploadFileToStore(
       req.file.path,
@@ -113,15 +144,17 @@ router.post('/stores/:name(*)/upload', upload.single('file'), async (req, res) =
       customMetadata
     );
 
-    await fs.unlink(req.file.path);
-
     res.json({ success: true, result });
   } catch (error) {
     console.error('Error uploading file:', error);
-    if (req.file) {
-      await fs.unlink(req.file.path).catch(() => {});
-    }
     res.status(500).json({ success: false, error: error.message });
+  } finally {
+    // Always clean up temp file
+    if (tempFile) {
+      await fs.unlink(tempFile).catch(err =>
+        console.error('Failed to clean up temp file:', err)
+      );
+    }
   }
 });
 
@@ -135,19 +168,15 @@ router.post('/stores/:name(*)/import', async (req, res) => {
 
     const storeName = req.params.name;
 
-    const chunkingConfig = maxTokensPerChunk ? {
-      white_space_config: {
-        max_tokens_per_chunk: parseInt(maxTokensPerChunk),
-        max_overlap_tokens: maxOverlapTokens ? parseInt(maxOverlapTokens) : undefined
-      }
-    } : null;
+    const chunkingConfig = buildChunkingConfig(maxTokensPerChunk, maxOverlapTokens);
+    const parsedMetadata = parseCustomMetadata(customMetadata);
 
     const result = await googleAI.importFileToStore(
       fileName,
       storeName,
       displayName,
       chunkingConfig,
-      customMetadata
+      parsedMetadata
     );
 
     res.json({ success: true, result });
