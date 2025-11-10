@@ -554,6 +554,7 @@ function toggleSidebar() {
       window.citationState.stickyCitationIdx = null;
       window.citationState.stickySourceIdx = null;
     }
+    closeAllDetails();
     clearAllHighlights();
   } else {
     toggleIcon.textContent = '◀';
@@ -591,13 +592,13 @@ function switchTab(tabName) {
 // === LEGACY FUNCTIONS (for backward compatibility) ===
 
 function highlightCitation(citationIdx) {
-  // Redirect to new system
-  highlightCitationAndSource(citationIdx, false);
+  // Redirect to new system with default options
+  highlightCitationAndSource(citationIdx, { expand: false, scroll: false });
 }
 
 function highlightCitationBySource(chunkIdx) {
-  // Redirect to new system
-  highlightSourceAndCitations(chunkIdx, false);
+  // Redirect to new system with default options
+  highlightSourceAndCitations(chunkIdx, { expand: false, scroll: false });
 }
 
 function clearHighlight() {
@@ -611,7 +612,8 @@ function handleMarkerHover(citationIdx) {
   // Only respond to hover if not in sticky mode
   if (window.citationState?.stickyMode) return;
 
-  highlightCitationAndSource(citationIdx, false);
+  // Hover: highlight only, no scroll, no expand
+  highlightCitationAndSource(citationIdx, { expand: false, scroll: false });
 }
 
 function handleMarkerLeave(citationIdx) {
@@ -629,16 +631,21 @@ function handleMarkerClick(event, citationIdx) {
       window.citationState?.stickyCitationIdx === citationIdx) {
     window.citationState.stickyMode = null;
     window.citationState.stickyCitationIdx = null;
+    closeAllDetails();
     clearAllCitationHighlights();
     return;
   }
+
+  // Close all previous details before switching
+  closeAllDetails();
 
   // Set sticky mode
   window.citationState.stickyMode = 'marker';
   window.citationState.stickyCitationIdx = citationIdx;
   window.citationState.stickySourceIdx = null;
 
-  highlightCitationAndSource(citationIdx, true);
+  // Click: highlight + scroll to sidebar + expand
+  highlightCitationAndSource(citationIdx, { expand: true, scroll: true, scrollTarget: 'sidebar' });
 }
 
 // === SOURCE-DRIVEN INTERACTION HANDLERS ===
@@ -647,7 +654,8 @@ function handleSourceHover(originalIdx) {
   // Only respond to hover if not in sticky mode
   if (window.citationState?.stickyMode) return;
 
-  highlightSourceAndCitations(originalIdx, false);
+  // Hover: highlight only, no scroll, no expand
+  highlightSourceAndCitations(originalIdx, { expand: false, scroll: false });
 }
 
 function handleSourceLeave(originalIdx) {
@@ -670,21 +678,29 @@ function handleSourceClick(event, originalIdx) {
       window.citationState?.stickySourceIdx === originalIdx) {
     window.citationState.stickyMode = null;
     window.citationState.stickySourceIdx = null;
+    closeAllDetails();
     clearAllCitationHighlights();
     return;
   }
+
+  // Close all previous details before switching
+  closeAllDetails();
 
   // Set sticky mode
   window.citationState.stickyMode = 'source';
   window.citationState.stickySourceIdx = originalIdx;
   window.citationState.stickyCitationIdx = null;
 
-  highlightSourceAndCitations(originalIdx, true);
+  // Click: highlight + scroll to answer + expand
+  highlightSourceAndCitations(originalIdx, { expand: true, scroll: true, scrollTarget: 'answer' });
 }
 
 // === HIGHLIGHT FUNCTIONS ===
 
-function highlightCitationAndSource(citationIdx, expand) {
+function highlightCitationAndSource(citationIdx, options = {}) {
+  // Default options: for backward compatibility
+  const { expand = false, scroll = false, scrollTarget = 'sidebar' } = options;
+
   clearAllCitationHighlights();
 
   // Highlight the citation markers and cited text
@@ -697,12 +713,12 @@ function highlightCitationAndSource(citationIdx, expand) {
   // Get the source chunks for this citation
   const displayIndices = window.citationToDisplayIndices?.get(citationIdx) || [];
 
-  if (displayIndices.length > 0) {
+  if (displayIndices.length > 0 && scrollTarget === 'sidebar') {
     // Open sidebar and switch to citations
     openSidebar();
     switchTab('citations');
 
-    // Highlight and scroll to sources
+    // Highlight and expand sources
     displayIndices.forEach((displayIdx, index) => {
       const sourceElement = document.getElementById(`display-source-${displayIdx}`);
       if (sourceElement) {
@@ -716,8 +732,8 @@ function highlightCitationAndSource(citationIdx, expand) {
           }
         }
 
-        // Scroll to the first one
-        if (index === 0) {
+        // Scroll to the first one only if scroll is enabled
+        if (scroll && index === 0) {
           sourceElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       }
@@ -725,7 +741,10 @@ function highlightCitationAndSource(citationIdx, expand) {
   }
 }
 
-function highlightSourceAndCitations(originalIdx, expand) {
+function highlightSourceAndCitations(originalIdx, options = {}) {
+  // Default options: for backward compatibility
+  const { expand = false, scroll = false, scrollTarget = 'answer' } = options;
+
   clearAllCitationHighlights();
 
   const displayIdx = window.originalToDisplayIndex?.get(originalIdx);
@@ -743,10 +762,14 @@ function highlightSourceAndCitations(originalIdx, expand) {
       }
     }
 
-    // Scroll to source
-    openSidebar();
-    switchTab('citations');
-    sourceElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Open sidebar if we're scrolling to it
+    if (scrollTarget === 'sidebar') {
+      openSidebar();
+      switchTab('citations');
+      if (scroll) {
+        sourceElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
   }
 
   // Find all citations that reference this source
@@ -760,6 +783,15 @@ function highlightSourceAndCitations(originalIdx, expand) {
     const citedTexts = document.querySelectorAll(`.cited-text[data-citation="${citationIdx}"]`);
     citedTexts.forEach(text => text.classList.add('highlighted'));
   });
+
+  // Scroll to first cited text in answer if requested
+  if (scroll && scrollTarget === 'answer' && citationIndices.length > 0) {
+    const firstCitationIdx = citationIndices[0];
+    const firstCitedText = document.querySelector(`.cited-text[data-citation="${firstCitationIdx}"]`);
+    if (firstCitedText) {
+      firstCitedText.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
 }
 
 function clearAllCitationHighlights() {
@@ -776,6 +808,13 @@ function clearAllCitationHighlights() {
   // Remove all highlight classes from sources
   document.querySelectorAll('.citation-item.highlighted').forEach(el => {
     el.classList.remove('highlighted');
+  });
+}
+
+function closeAllDetails() {
+  // Close all <details> elements in the citations list
+  document.querySelectorAll('.citation-details').forEach(details => {
+    details.open = false;
   });
 }
 
@@ -842,6 +881,7 @@ document.addEventListener('click', (e) => {
       window.citationState.stickyMode = null;
       window.citationState.stickyCitationIdx = null;
       window.citationState.stickySourceIdx = null;
+      closeAllDetails();
       clearAllCitationHighlights();
     }
   }
