@@ -670,7 +670,19 @@ code {
   background: var(--bg-light);
   border-left: 3px solid var(--primary-color);
   border-radius: 4px;
-  transition: background 0.3s;
+  transition: background 0.3s, box-shadow 0.3s, border-left-width 0.3s;
+  cursor: pointer;
+}
+
+.citation-item:hover {
+  background: #e8eaf6;
+}
+
+.citation-item.highlighted {
+  background: #fff3cd;
+  border-left-width: 5px;
+  border-left-color: #ff9800;
+  box-shadow: 0 0 12px rgba(255, 152, 0, 0.3);
 }
 
 .citation-header {
