@@ -148,7 +148,7 @@ export async function listDocuments(storeName, pageSize = 20) {
 
 /**
  * Deletes a document from a store
- * @param {string} name - Document name (format: fileSearchStores/*/documents/*)
+ * @param {string} name - Document name (format: fileSearchStores/WILDCARD/documents/WILDCARD)
  * @param {boolean} [force=true] - Force deletion
  * @returns {Promise<Object>} Deletion result
  */
